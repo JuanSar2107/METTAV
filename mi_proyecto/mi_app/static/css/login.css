@@ -225,6 +225,34 @@ html, body {
 }
 
 /* ── Botón ───────────────────────────────────────────── */
+.mode-toggle {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.form-message {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #eaf4fd;
+    color: var(--input-text);
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.form-message[data-state="error"] {
+    background: #fff0ef;
+    color: #9b2525;
+}
+
+.btn-login:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
 .btn-login {
     width: 100%;
     height: 52px;
