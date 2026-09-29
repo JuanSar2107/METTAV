@@ -1,0 +1,19 @@
+# Python virtual environments
+.venv/
+venv/
+mi_proyecto/venv/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Local environment variables and private instance data
+.env
+.env.*
+!.env.example
+mi_proyecto/instance/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
