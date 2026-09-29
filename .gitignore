@@ -1,19 +1,39 @@
-# Python virtual environments
-.venv/
-venv/
-mi_proyecto/venv/
-
-# Python bytecode and caches
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+*.pyc
 
-# Local environment variables and private instance data
+# Entornos virtuales
+venv/
+.venv/
+env/
+.env/
+
+# Variables de entorno
 .env
-.env.*
-!.env.example
-mi_proyecto/instance/
+*.env
 
-# Test and coverage artifacts
-.pytest_cache/
-.coverage
-htmlcov/
+# Flask / Werkzeug
+instance/
+.webassets-cache
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Distribución / build
+dist/
+build/
+*.egg-info/

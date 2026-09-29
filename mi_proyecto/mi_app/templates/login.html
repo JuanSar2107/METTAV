@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Acceso al sistema de gestión METTAV Group SAS">
+    <title>Iniciar sesión | METTAV Group SAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+<main class="login-page">
+    <div class="bg-overlay"></div>
+
+    <section class="login-card" aria-labelledby="brand-heading">
+        <header class="brand">
+            <img class="brand__logo" src="{{ url_for('static', filename='images/mettav-logo.png') }}" alt="METTAV Logo">
+            <h1 id="brand-heading" class="brand__name">METTAV</h1>
+            <p class="brand__sub">GROUP SAS</p>
+        </header>
+
+        <form class="login-form" autocomplete="on">
+            <div class="field-group">
+                <label class="field-label" for="username">
+                    <img class="label-icon" src="{{ url_for('static', filename='images/user.svg') }}" alt="" aria-hidden="true">
+                    <span>Nombre de Usuario</span>
+                </label>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <img src="{{ url_for('static', filename='images/user.svg') }}" alt="" aria-hidden="true">
+                    </span>
+                    <input id="username" name="username" type="text" value="admin.mettav" autocomplete="username">
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label" for="password">
+                    <img class="label-icon" src="{{ url_for('static', filename='images/lock.svg') }}" alt="" aria-hidden="true">
+                    <span>Contraseña</span>
+                </label>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <img src="{{ url_for('static', filename='images/lock.svg') }}" alt="" aria-hidden="true">
+                    </span>
+                    <input id="password" name="password" type="password" placeholder="••••••••••" autocomplete="current-password">
+                </div>
+            </div>
+
+            <div class="form-options">
+                <label class="remember-label">
+                    <input type="checkbox" name="remember">
+                    <span>Recordar Usuario</span>
+                </label>
+                <a href="#" class="link-subtle">Olvidé mi contraseña?</a>
+            </div>
+
+            <button class="btn-login" type="button">INICIAR SESIÓN</button>
+        </form>
+
+        <footer class="login-footer">
+            <a href="#" class="link-subtle">Registrar nueva cuenta</a>
+            <span aria-hidden="true">/</span>
+            <a href="#" class="link-subtle">Soporte Técnico</a>
+        </footer>
+    </section>
+</main>
+</body>
+</html>

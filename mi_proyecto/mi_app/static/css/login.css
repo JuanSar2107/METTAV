@@ -1,0 +1,278 @@
+:root {
+    --blue: #0060aa;
+    --blue-dark: #004d8c;
+    --blue-brand: #054a86;
+    --blue-sub: #1d4d7a;
+    --label: #274765;
+    --input-bg: #eaf4fd;
+    --input-border: #b8d6f0;
+    --input-focus: #4b9bd5;
+    --input-text: #194065;
+    --link: #1a4d79;
+    --card-bg: rgba(245, 249, 253, 0.9);
+    --card-border: rgba(255, 255, 255, 0.92);
+    --shadow: 0 24px 70px rgba(5, 20, 45, 0.42), 0 4px 18px rgba(0,0,0,0.14);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    font-family: 'Barlow', sans-serif;
+    color: var(--label);
+    background: #3b505d;
+}
+
+/* ── Página ──────────────────────────────────────────── */
+.login-page {
+    position: relative;
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: url('../images/workshop-bg.jpg') center center / cover no-repeat;
+    overflow: hidden;
+}
+
+.bg-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, rgba(12,28,46,0.46) 100%),
+        rgba(8, 22, 36, 0.22);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 0;
+}
+
+/* ── Tarjeta ─────────────────────────────────────────── */
+.login-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 480px;
+    padding: 38px 38px 30px;
+    background: var(--card-bg);
+    border: 1.5px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    animation: appear 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes appear {
+    from { opacity: 0; transform: translateY(18px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* ── Marca ───────────────────────────────────────────── */
+.brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 22px;
+}
+
+.brand__logo {
+    width: 148px;
+    height: auto;
+    max-height: 120px;
+    object-fit: contain;
+    margin-bottom: 4px;
+}
+
+.brand__name {
+    margin: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 46px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--blue-brand);
+    letter-spacing: 0.04em;
+}
+
+.brand__sub {
+    margin: 5px 0 0;
+    font-family: 'Barlow', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--blue-sub);
+    letter-spacing: 0.14em;
+}
+
+/* ── Formulario ──────────────────────────────────────── */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15.5px;
+    font-weight: 600;
+    color: var(--label);
+}
+
+.label-icon {
+    width: 17px;
+    height: 17px;
+    opacity: 0.85;
+}
+
+.input-wrap {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    background: var(--input-bg);
+    border: 1.5px solid var(--input-border);
+    border-radius: 9px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-wrap:focus-within {
+    border-color: var(--input-focus);
+    background: #f1f8fe;
+    box-shadow: 0 0 0 3px rgba(75, 155, 213, 0.22);
+}
+
+.input-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 45px;
+    height: 100%;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(184, 214, 240, 0.7);
+}
+
+.input-icon img {
+    width: 20px;
+    height: 20px;
+}
+
+.input-wrap input {
+    width: 100%;
+    height: 100%;
+    padding: 0 14px;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: 'Barlow', sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--input-text);
+}
+
+.input-wrap input::placeholder {
+    color: #8daec7;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+}
+
+/* ── Opciones ────────────────────────────────────────── */
+.form-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 15px;
+}
+
+.remember-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+}
+
+.remember-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--blue);
+    cursor: pointer;
+}
+
+.link-subtle {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-weight: 500;
+    font-size: 15px;
+    transition: color 0.15s;
+}
+
+.link-subtle:hover {
+    color: var(--blue);
+}
+
+/* ── Botón ───────────────────────────────────────────── */
+.btn-login {
+    width: 100%;
+    height: 52px;
+    margin-top: 4px;
+    border: none;
+    border-radius: 10px;
+    background: var(--blue);
+    color: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 96, 170, 0.38);
+    transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+
+.btn-login:hover {
+    background: var(--blue-dark);
+    box-shadow: 0 6px 20px rgba(0, 96, 170, 0.48);
+}
+
+.btn-login:active {
+    transform: translateY(1px);
+}
+
+/* ── Footer ──────────────────────────────────────────── */
+.login-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 22px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #8daec7;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 520px) {
+    .login-card {
+        padding: 28px 22px 24px;
+        border-radius: 16px;
+    }
+    .brand__logo { width: 120px; }
+    .brand__name { font-size: 38px; }
+    .brand__sub  { font-size: 16px; }
+    .form-options { flex-wrap: wrap; gap: 8px; }
+    .btn-login { height: 48px; font-size: 21px; }
+    .login-footer { font-size: 13.5px; }
+}
