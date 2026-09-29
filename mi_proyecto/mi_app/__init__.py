@@ -2,7 +2,7 @@ from flask import Flask
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'mettav-secret-key-2026'
+    app.config['SECRET_KEY'] = 'mettav-dev-key-2026'
 
     from .routes.main import main_bp
     app.register_blueprint(main_bp)

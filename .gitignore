@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+.env/
+
+# Variables de entorno
+.env
+*.env
+
+# Flask / Werkzeug
+instance/
+.webassets-cache
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Distribución / build
+dist/
+build/
+*.egg-info/
