@@ -1,11 +1,18 @@
 :root {
     color-scheme: light;
-    --blue: #075194;
-    --blue-deep: #073f78;
-    --blue-bright: #0874c5;
-    --ink: #153f68;
-    --orange: #f59732;
-    --line: #a9d4f4;
+    --primary-blue: #0060aa;
+    --primary-blue-hover: #00508f;
+    --brand-text: #054a86;
+    --brand-subtext: #1d4d7a;
+    --label-color: #274765;
+    --input-bg: #eaf4fd;
+    --input-border: #b8d6f0;
+    --input-border-focus: #4b9bd5;
+    --input-text: #194065;
+    --link-color: #1a4d79;
+    --card-bg: rgba(245, 249, 253, 0.88);
+    --card-border: rgba(255, 255, 255, 0.95);
+    --card-shadow: 0 24px 65px rgba(5, 25, 45, 0.38), 0 4px 18px rgba(0, 0, 0, 0.15);
 }
 
 * {
@@ -16,325 +23,298 @@ body {
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    color: var(--ink);
-    font-family: "Barlow", sans-serif;
-    background: #536d7c;
+    font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--label-color);
+    background-color: #3b505d;
 }
 
 .login-page {
     position: relative;
-    display: grid;
+    display: flex;
     min-height: 100vh;
-    place-items: center;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: url('../images/workshop-bg.jpg') center center / cover no-repeat fixed;
     overflow: hidden;
-    padding: 24px;
-    isolation: isolate;
-    background:
-        linear-gradient(180deg, rgba(21, 49, 67, .18), rgba(10, 34, 52, .43)),
-        linear-gradient(90deg, #6b828b 0%, #a9b9bc 20%, #d1d7d5 49%, #788b8e 77%, #364d5a 100%);
 }
 
-.login-page::before {
+.background-overlay {
     position: absolute;
-    z-index: -1;
-    inset: -30px;
-    content: "";
-    background:
-        linear-gradient(90deg, transparent 0 5%, rgba(39, 63, 71, .64) 5.5% 6.5%, transparent 7% 93%, rgba(33, 51, 58, .72) 94% 96%, transparent 97%),
-        repeating-linear-gradient(90deg, transparent 0 42px, rgba(228, 235, 231, .36) 44px 49px, rgba(45, 63, 69, .29) 50px 56px, transparent 58px 126px),
-        linear-gradient(180deg, #a5b8bd 0 11%, #576c72 11.5% 14%, transparent 14%),
-        linear-gradient(165deg, transparent 0 45%, rgba(205, 112, 67, .78) 45.5% 46.5%, rgba(57, 63, 62, .75) 47% 48%, transparent 48.5%),
-        linear-gradient(180deg, transparent 0 26%, rgba(37, 54, 59, .74) 26.5% 28%, transparent 28.5% 48%, rgba(47, 58, 59, .68) 48.5% 50%, transparent 50.5% 70%, rgba(42, 56, 58, .72) 70.5% 72%, transparent 72.5%),
-        linear-gradient(90deg, rgba(16, 45, 59, .52), transparent 33% 66%, rgba(18, 39, 50, .47));
-    filter: blur(5px);
-    transform: scale(1.035);
-}
-
-.workshop {
-    position: absolute;
-    z-index: -1;
     inset: 0;
-    overflow: hidden;
-    filter: blur(2px);
-    opacity: .78;
-}
-
-.workshop__sign {
-    position: absolute;
-    top: 17%;
-    left: 2.5%;
-    display: grid;
-    width: 122px;
-    height: 160px;
-    align-content: center;
-    justify-items: center;
-    color: #174a70;
-    background: rgba(230, 235, 226, .64);
-    box-shadow: 0 5px 18px rgba(19, 37, 43, .26);
-    transform: rotate(5deg);
-}
-
-.workshop__sign span {
-    font-family: "Barlow Condensed", sans-serif;
-    font-size: 30px;
-    font-weight: 800;
-}
-
-.workshop__sign small {
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.workshop__shelf {
-    position: absolute;
-    right: -2%;
-    width: 31%;
-    height: 12px;
-    border-top: 5px solid #b96b43;
-    background: rgba(36, 48, 51, .75);
-    box-shadow: 0 7px 15px rgba(17, 33, 40, .38);
-    transform: skewY(-13deg);
-}
-
-.workshop__shelf--one {
-    top: 34%;
-}
-
-.workshop__shelf--two {
-    top: 64%;
-}
-
-.workshop__figure {
-    position: absolute;
-    bottom: 9%;
-    width: 54px;
-    height: 114px;
-    border-radius: 35px 35px 10px 10px;
-    background: linear-gradient(180deg, #b58b67 0 22%, #304b5a 23% 100%);
-    box-shadow: 0 8px 18px rgba(12, 27, 35, .34);
-}
-
-.workshop__figure--one {
-    left: 6%;
-    transform: rotate(7deg);
-}
-
-.workshop__figure--two {
-    left: 15%;
-    bottom: 7%;
-    width: 42px;
-    height: 94px;
-    background: linear-gradient(180deg, #b98761 0 22%, #b45f35 23% 100%);
-    transform: rotate(-8deg);
+    background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, rgba(15, 32, 48, 0.45) 100%),
+                rgba(10, 25, 38, 0.2);
+    backdrop-filter: blur(1.5px);
+    -webkit-backdrop-filter: blur(1.5px);
+    z-index: 1;
 }
 
 .login-panel {
-    width: min(100%, 516px);
-    padding: 38px 37px 27px;
-    border: 2px solid rgba(255, 255, 255, .88);
-    border-radius: 16px;
-    background: rgba(246, 250, 252, .83);
-    box-shadow: 0 22px 70px rgba(14, 33, 44, .3), inset 0 1px rgba(255, 255, 255, .8);
-    backdrop-filter: blur(13px);
-    animation: panel-enter .7s cubic-bezier(.2, .75, .25, 1) both;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 480px;
+    padding: 36px 36px 28px;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: var(--card-shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: panelAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@keyframes panelAppear {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Marca / Encabezado */
 .brand {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 10px;
-    color: var(--blue);
+    text-align: center;
+    margin-bottom: 22px;
 }
 
 .brand__mark {
-    width: 144px;
-    height: 112px;
+    width: 145px;
+    height: auto;
+    max-height: 120px;
     object-fit: contain;
+    margin-bottom: 2px;
 }
 
 .brand h1 {
-    margin: -2px 0 0;
-    font-family: "Barlow Condensed", sans-serif;
-    font-size: 48px;
+    margin: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 46px;
     font-weight: 800;
-    line-height: .95;
-    letter-spacing: 0;
+    line-height: 1;
+    color: var(--brand-text);
+    letter-spacing: 0.04em;
 }
 
 .brand p {
-    margin: 5px 0 0;
-    font-size: 20px;
+    margin: 4px 0 0;
+    font-family: 'Barlow', sans-serif;
+    font-size: 19px;
     font-weight: 700;
-    letter-spacing: 2px;
+    color: var(--brand-subtext);
+    letter-spacing: 0.12em;
 }
 
+/* Formulario */
 .login-form {
-    display: grid;
-    gap: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .field-group {
-    display: grid;
-    gap: 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .field-label {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 17px;
-    font-weight: 500;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--label-color);
 }
 
-.field-label img {
-    width: 20px;
-    height: 20px;
+.field-label .label-icon {
+    width: 17px;
+    height: 17px;
+    opacity: 0.9;
 }
 
 .input-wrap {
     display: flex;
-    height: 47px;
     align-items: center;
-    overflow: hidden;
-    border: 1px solid var(--line);
+    height: 48px;
+    background-color: var(--input-bg);
+    border: 1.5px solid var(--input-border);
     border-radius: 8px;
-    background: rgba(232, 244, 253, .93);
-    box-shadow: inset 0 1px 2px rgba(10, 69, 116, .06);
+    overflow: hidden;
+    transition: all 0.2s ease-in-out;
 }
 
-.input-icon {
+.input-wrap:focus-within {
+    border-color: var(--input-border-focus);
+    background-color: #f1f8fe;
+    box-shadow: 0 0 0 3px rgba(75, 155, 213, 0.25);
+}
+
+.input-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 44px;
     height: 100%;
-    flex: 0 0 44px;
-    padding: 11px;
-    border-right: 1px solid rgba(99, 159, 204, .24);
+    flex-shrink: 0;
+    border-right: 1px solid rgba(184, 214, 240, 0.75);
+}
+
+.input-icon-box img {
+    width: 20px;
+    height: 20px;
 }
 
 .input-wrap input {
     width: 100%;
     height: 100%;
-    padding: 0 13px;
-    border: 0;
-    outline: 0;
-    color: var(--blue-deep);
+    padding: 0 14px;
+    border: none;
+    outline: none;
     background: transparent;
-    font: 500 21px "Barlow", sans-serif;
+    font-family: 'Barlow', sans-serif;
+    font-size: 19px;
+    font-weight: 500;
+    color: var(--input-text);
 }
 
 .input-wrap input::placeholder {
-    color: var(--blue-deep);
-    opacity: 1;
+    color: #8daec7;
+    font-size: 16px;
+    letter-spacing: 0.1em;
 }
 
-.input-wrap:focus-within {
-    border-color: #4b9bd5;
-    box-shadow: 0 0 0 3px rgba(60, 148, 211, .16);
-}
-
+/* Opciones: Recordar & Olvidé contraseña */
 .form-options {
     display: flex;
-    min-height: 31px;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 0 1px;
-    font-size: 16px;
+    margin-top: 2px;
+    font-size: 15px;
 }
 
 .remember-option {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    white-space: nowrap;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--label-color);
+    cursor: pointer;
+    user-select: none;
 }
 
-.remember-option input {
-    width: 19px;
-    height: 19px;
+.remember-option input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
     margin: 0;
-    accent-color: var(--blue-bright);
+    border-radius: 4px;
+    accent-color: var(--primary-blue);
+    cursor: pointer;
 }
 
-.form-options a,
-.login-footer a {
-    color: var(--blue-deep);
+.link-secondary {
+    color: var(--link-color);
+    text-decoration: underline;
     text-underline-offset: 3px;
+    font-weight: 500;
+    transition: color 0.15s ease;
 }
 
+.link-secondary:hover {
+    color: var(--primary-blue);
+}
+
+/* Botón de Enviar */
 .submit-button {
-    min-height: 52px;
-    margin-top: 4px;
-    border: 0;
-    border-radius: 10px;
-    color: #fff;
-    background: linear-gradient(105deg, #0875c5, #0865ae);
-    font: 700 22px "Barlow Condensed", sans-serif;
-    cursor: default;
+    margin-top: 6px;
+    height: 50px;
+    border: none;
+    border-radius: 9px;
+    background: var(--primary-blue);
+    color: #ffffff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 14px rgba(0, 96, 170, 0.35);
 }
 
+.submit-button:hover {
+    background: var(--primary-blue-hover);
+    box-shadow: 0 6px 18px rgba(0, 96, 170, 0.45);
+}
+
+.submit-button:active {
+    transform: translateY(1px);
+}
+
+/* Footer con enlaces */
 .login-footer {
     display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 12px;
-    margin-top: 13px;
-    font-size: 16px;
+    gap: 10px;
+    margin-top: 22px;
+    font-size: 15.5px;
+    font-weight: 500;
 }
 
-@keyframes panel-enter {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.link-footer {
+    color: var(--link-color);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.15s ease;
 }
 
-@media (max-width: 540px) {
-    .login-page {
-        padding: 14px;
-    }
+.link-footer:hover {
+    color: var(--primary-blue);
+}
 
+.footer-divider {
+    color: #8daec7;
+    font-weight: 400;
+}
+
+/* Adaptación responsive */
+@media (max-width: 520px) {
     .login-panel {
-        padding: 29px 22px 23px;
-        border-radius: 13px;
+        padding: 28px 22px 24px;
+        border-radius: 16px;
     }
 
     .brand__mark {
-        width: 118px;
-        height: 92px;
+        width: 120px;
+        max-height: 90px;
     }
 
     .brand h1 {
-        font-size: 43px;
+        font-size: 38px;
     }
 
     .brand p {
-        font-size: 17px;
+        font-size: 16px;
     }
 
     .form-options {
         font-size: 14px;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
-    .remember-option {
-        gap: 7px;
+    .submit-button {
+        height: 48px;
+        font-size: 21px;
     }
 
     .login-footer {
-        gap: 8px;
         font-size: 14px;
     }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        scroll-behavior: auto !important;
-    }
-}
+}
