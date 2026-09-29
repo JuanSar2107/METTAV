@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar sesión | METTAV Group SAS{% endblock %}
+
+{% block content %}
+<main class="login-page">
+    <div class="workshop" aria-hidden="true">
+        <div class="workshop__sign"><span>METTAV</span><small>GROUP SAS</small></div>
+        <div class="workshop__shelf workshop__shelf--one"></div>
+        <div class="workshop__shelf workshop__shelf--two"></div>
+        <div class="workshop__figure workshop__figure--one"></div>
+        <div class="workshop__figure workshop__figure--two"></div>
+    </div>
+
+    <section class="login-panel" aria-labelledby="brand-name">
+        <header class="brand">
+            <img class="brand__mark" src="{{ url_for('static', filename='images/mettav-mark.svg') }}" alt="">
+            <h1 id="brand-name">METTAV</h1>
+            <p>GROUP SAS</p>
+        </header>
+
+        <form class="login-form">
+            <div class="field-group">
+                <label class="field-label" for="username">
+                    <img src="{{ url_for('static', filename='images/user.svg') }}" alt="">
+                    <span>Nombre de Usuario</span>
+                </label>
+                <div class="input-wrap">
+                    <img class="input-icon" src="{{ url_for('static', filename='images/user.svg') }}" alt="">
+                    <input id="username" name="username" type="text" value="admin.mettav" autocomplete="username">
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label" for="password">
+                    <img src="{{ url_for('static', filename='images/lock.svg') }}" alt="">
+                    <span>Contraseña</span>
+                </label>
+                <div class="input-wrap">
+                    <img class="input-icon" src="{{ url_for('static', filename='images/lock.svg') }}" alt="">
+                    <input id="password" name="password" type="password" placeholder="••••••••••" autocomplete="current-password">
+                </div>
+            </div>
+
+            <div class="form-options">
+                <label class="remember-option">
+                    <input type="checkbox" name="remember">
+                    <span>Recordar Usuario</span>
+                </label>
+                <a href="#">Olvidé mi contraseña?</a>
+            </div>
+
+            <button class="submit-button" type="button">INICIAR SESIÓN</button>
+        </form>
+
+        <footer class="login-footer">
+            <a href="#">Registrar nueva cuenta</a>
+            <span aria-hidden="true">/</span>
+            <a href="#">Soporte Técnico</a>
+        </footer>
+    </section>
+</main>
+{% endblock %}
