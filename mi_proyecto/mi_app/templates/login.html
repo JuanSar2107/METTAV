@@ -21,7 +21,14 @@
             <p class="brand__sub">GROUP SAS</p>
         </header>
 
-        <form class="login-form" autocomplete="on">
+        <form
+            class="login-form"
+            id="auth-form"
+            data-login-url="{{ url_for('usuarios.iniciar_sesion') }}"
+            data-register-url="{{ url_for('usuarios.registrar_usuario') }}"
+            data-mode="login"
+            autocomplete="on"
+        >
             <div class="field-group">
                 <label class="field-label" for="username">
                     <img class="label-icon" src="{{ url_for('static', filename='images/user.svg') }}" alt="" aria-hidden="true">
@@ -31,7 +38,7 @@
                     <span class="input-icon">
                         <img src="{{ url_for('static', filename='images/user.svg') }}" alt="" aria-hidden="true">
                     </span>
-                    <input id="username" name="username" type="text" value="admin.mettav" autocomplete="username">
+                    <input id="username" name="usuario" type="text" maxlength="80" autocomplete="username" required>
                 </div>
             </div>
 
@@ -44,7 +51,7 @@
                     <span class="input-icon">
                         <img src="{{ url_for('static', filename='images/lock.svg') }}" alt="" aria-hidden="true">
                     </span>
-                    <input id="password" name="password" type="password" placeholder="••••••••••" autocomplete="current-password">
+                    <input id="password" name="contrasena" type="password" placeholder="••••••••••" autocomplete="current-password" required>
                 </div>
             </div>
 
@@ -53,18 +60,17 @@
                     <input type="checkbox" name="remember">
                     <span>Recordar Usuario</span>
                 </label>
-                <a href="#" class="link-subtle">Olvidé mi contraseña?</a>
             </div>
 
-            <button class="btn-login" type="button">INICIAR SESIÓN</button>
+            <p class="form-message" id="form-message" role="status" aria-live="polite" hidden></p>
+            <button class="btn-login" id="submit-button" type="submit">INICIAR SESIÓN</button>
         </form>
 
         <footer class="login-footer">
-            <a href="#" class="link-subtle">Registrar nueva cuenta</a>
-            <span aria-hidden="true">/</span>
-            <a href="#" class="link-subtle">Soporte Técnico</a>
+            <button class="link-subtle mode-toggle" id="mode-toggle" type="button">Registrar nueva cuenta</button>
         </footer>
     </section>
 </main>
+<script src="{{ url_for('static', filename='js/login.js') }}" defer></script>
 </body>
 </html>
