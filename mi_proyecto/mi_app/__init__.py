@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 from flask import Flask, jsonify
 from sqlalchemy import inspect, text
@@ -10,9 +11,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     database_path = Path(app.root_path).parent / "instance" / "mi_proyecto.sqlite3"
     database_path.parent.mkdir(parents=True, exist_ok=True)
+    database_url = os.getenv("DATABASE_URL")
+    if database_url and database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
     app.config.from_mapping(
-        SECRET_KEY="mettav-dev-key-2026",
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{database_path}",
+        SECRET_KEY=os.getenv("SECRET_KEY", "mettav-dev-key-2026"),
+        SQLALCHEMY_DATABASE_URI=database_url or f"sqlite:///{database_path}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
     )

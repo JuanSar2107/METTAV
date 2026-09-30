@@ -77,6 +77,9 @@ def _inventario_inicial():
         db.session.add(ConfiguracionSistema(clave=clave, valor="1"))
         db.session.commit()
     return ArticuloInventario.query.order_by(ArticuloInventario.id).all()
+@main_bp.get('/health')
+def health():
+    return {'status': 'ok'}
 
 @main_bp.route('/')
 def login():
