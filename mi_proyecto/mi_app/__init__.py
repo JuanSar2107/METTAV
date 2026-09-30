@@ -31,11 +31,43 @@ def create_app(test_config: dict | None = None) -> Flask:
     with app.app_context():
         db.create_all()
         user_columns = {column["name"] for column in inspect(db.engine).get_columns("usuarios")}
-        if "es_admin" not in user_columns:
+        user_migrations = {
+            "es_admin": "BOOLEAN NOT NULL DEFAULT 0",
+            "nombre_completo": "VARCHAR(120)",
+            "correo": "VARCHAR(254)",
+            "numero_identidad": "VARCHAR(32)",
+            "telefono": "VARCHAR(32)",
+            "direccion": "VARCHAR(255)",
+            "imagen_perfil": "VARCHAR(500)",
+        }
+        missing_columns = {
+            column_name: column_type
+            for column_name, column_type in user_migrations.items()
+            if column_name not in user_columns
+        }
+        if missing_columns:
             with db.engine.begin() as connection:
-                connection.execute(
-                    text("ALTER TABLE usuarios ADD COLUMN es_admin BOOLEAN NOT NULL DEFAULT 0")
-                )
+                for column_name, column_type in missing_columns.items():
+                    connection.execute(
+                        text(f"ALTER TABLE usuarios ADD COLUMN {column_name} {column_type}")
+                    )
+
+        indexes = inspect(db.engine).get_indexes("usuarios")
+        constraints = inspect(db.engine).get_unique_constraints("usuarios")
+        unique_columns = {
+            tuple(index.get("column_names") or [])
+            for index in indexes + constraints
+            if index.get("unique") or index in constraints
+        }
+        for column_name in ("correo", "numero_identidad"):
+            if (column_name,) not in unique_columns:
+                with db.engine.begin() as connection:
+                    connection.execute(
+                        text(
+                            f"CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_{column_name} "
+                            f"ON usuarios ({column_name})"
+                        )
+                    )
 
     @app.errorhandler(413)
     def archivo_supera_limite(_error):

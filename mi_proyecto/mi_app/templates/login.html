@@ -25,9 +25,7 @@
             class="login-form"
             id="auth-form"
             data-login-url="{{ url_for('usuarios.iniciar_sesion') }}"
-            data-register-url="{{ url_for('usuarios.registrar_usuario') }}"
             data-dashboard-url="{{ url_for('main.dashboard') }}"
-            data-mode="login"
             autocomplete="on"
         >
             <div class="field-group">
@@ -67,9 +65,6 @@
             <button class="btn-login" id="submit-button" type="submit">INICIAR SESIÓN</button>
         </form>
 
-        <footer class="login-footer">
-            <button class="link-subtle mode-toggle" id="mode-toggle" type="button">Registrar nueva cuenta</button>
-        </footer>
     </section>
 </main>
 <script src="{{ url_for('static', filename='js/login.js') }}" defer></script>

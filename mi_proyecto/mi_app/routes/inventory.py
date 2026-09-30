@@ -1,18 +1,14 @@
-from pathlib import Path
 from uuid import uuid4
-from urllib.parse import urlparse
 
-from flask import Blueprint, current_app, jsonify, request, session
-from PIL import Image, ImageOps, UnidentifiedImageError
+from flask import Blueprint, jsonify, request, session
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 
 from mi_app.extensions import db
+from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
 from mi_app.models import ArticuloInventario, Usuario
 
 inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
-_FORMATOS_IMAGEN = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
-_MAX_PIXELES_IMAGEN = 20_000_000
 
 
 def _usuario_actual() -> Usuario | None:
@@ -29,41 +25,6 @@ def _error_admin():
     if not usuario.es_admin:
         return jsonify(error="Solo un administrador puede gestionar los artículos."), 403
     return None
-
-
-def _guardar_imagen(archivo) -> tuple[str, Path]:
-    if archivo is None or not archivo.filename:
-        raise ValueError("Selecciona una imagen para el artículo.")
-
-    try:
-        with Image.open(archivo.stream) as imagen:
-            formato = imagen.format
-            ancho, alto = imagen.size
-            if formato not in _FORMATOS_IMAGEN:
-                raise ValueError("La imagen debe ser JPEG, PNG o WEBP.")
-            if ancho * alto > _MAX_PIXELES_IMAGEN:
-                raise ValueError("La imagen tiene dimensiones demasiado grandes.")
-            imagen.verify()
-        archivo.stream.seek(0)
-        with Image.open(archivo.stream) as imagen:
-            imagen = ImageOps.exif_transpose(imagen)
-            if formato == "JPEG":
-                imagen = imagen.convert("RGB")
-                opciones = {"quality": 88, "optimize": True}
-            elif formato == "WEBP":
-                imagen = imagen.convert("RGBA" if "A" in imagen.getbands() else "RGB")
-                opciones = {"quality": 88, "method": 6}
-            else:
-                opciones = {"optimize": True}
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
-        raise ValueError("El archivo no es una imagen válida.") from error
-
-    nombre_archivo = f"{uuid4().hex}{_FORMATOS_IMAGEN[formato]}"
-    carpeta = Path(current_app.static_folder) / "images" / "inventory"
-    carpeta.mkdir(parents=True, exist_ok=True)
-    ruta = carpeta / nombre_archivo
-    imagen.save(ruta, format=formato, **opciones)
-    return f"/static/images/inventory/{nombre_archivo}", ruta
 
 
 @inventario_bp.post("/")
@@ -93,7 +54,7 @@ def crear_articulo():
         return jsonify(error="El stock no puede ser negativo."), 400
 
     try:
-        imagen_url, ruta_imagen = _guardar_imagen(request.files.get("imagen"))
+        imagen_url, ruta_imagen = guardar_imagen(request.files.get("imagen"), "inventory")
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -128,15 +89,10 @@ def eliminar_articulo(id_articulo: int):
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 
-    ruta_imagen = None
-    nombre_archivo = Path(urlparse(articulo.imagen_url).path).name
-    if articulo.imagen_url.startswith("/static/images/inventory/") and nombre_archivo:
-        ruta_imagen = Path(current_app.static_folder) / "images" / "inventory" / nombre_archivo
-
+    imagen_url = articulo.imagen_url
     db.session.delete(articulo)
     db.session.commit()
-    if ruta_imagen is not None:
-        ruta_imagen.unlink(missing_ok=True)
+    eliminar_imagen_subida(imagen_url, "inventory")
     return jsonify(mensaje="Artículo eliminado.")
 
 
