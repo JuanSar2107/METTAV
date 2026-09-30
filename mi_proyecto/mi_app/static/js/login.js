@@ -61,6 +61,9 @@
 
             if (registering) {
                 setMode("login");
+            } else {
+                window.location.assign(form.dataset.dashboardUrl);
+                return;
             }
             message.dataset.state = "success";
             message.textContent = registering

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#dce8ed">
+    <meta name="description" content="Panel de control de METTAV Group SAS">
+    <title>Panel de control | METTAV Group SAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+<main class="dashboard-page">
+    <div class="bg-overlay" aria-hidden="true"></div>
+
+    <section class="dashboard-shell" aria-labelledby="dashboard-title">
+        <header class="dashboard-header">
+            <a class="brand" href="{{ url_for('main.dashboard') }}" aria-label="METTAV, panel de control">
+                <img class="brand__logo" src="{{ url_for('static', filename='images/mettav-logo.png') }}" alt="">
+                <span class="brand__text">
+                    <span class="brand__name">METTAV</span>
+                    <span class="brand__sub">GROUP SAS</span>
+                </span>
+            </a>
+            <div class="account-controls">
+                <span class="account-name">{{ usuario.usuario }}</span>
+                {% if es_admin %}<span class="role-label">Administrador</span>{% endif %}
+                <button class="btn-logout" id="logout-button" type="button" aria-label="Cerrar sesión" title="Cerrar sesión">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M10 17l5-5-5-5M15 12H3m9-8h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+                    </svg>
+                    <span>Cerrar sesión</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="dashboard-content">
+            <div class="inventory-heading">
+                <div>
+                    <p class="eyebrow">GESTIÓN DE BODEGA</p>
+                    <h1 id="dashboard-title">Inventario</h1>
+                    <p class="welcome-message">Bienvenido, {{ usuario.usuario }}. Consulta y administra tus artículos.</p>
+                </div>
+                <div class="inventory-heading-actions">
+                    {% if es_admin %}
+                    <button class="btn-add-item" id="open-add-item" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" />
+                        </svg>
+                        <span>Agregar artículo</span>
+                    </button>
+                    {% endif %}
+                    <span class="demo-notice">Inventario inicial de ejemplo</span>
+                </div>
+            </div>
+
+            <section class="inventory-summary" aria-label="Resumen del inventario">
+                <div class="summary-item">
+                    <span>Artículos</span>
+                    <strong id="summary-items">{{ articulos|length }}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Unidades disponibles</span>
+                    <strong id="summary-units">{{ articulos|sum(attribute='stock') }}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Stock bajo</span>
+                    <strong id="summary-low-stock">{{ articulos|selectattr('stock', 'le', 5)|list|length }}</strong>
+                </div>
+            </section>
+
+            <div class="inventory-toolbar">
+                <label class="search-field" for="inventory-search">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-4-4" />
+                    </svg>
+                    <input id="inventory-search" type="search" placeholder="Buscar artículo o categoría" autocomplete="off">
+                </label>
+                <span class="results-count" id="results-count" aria-live="polite">{{ articulos|length }} artículos</span>
+            </div>
+
+            <section class="inventory-grid" id="inventory-grid" aria-label="Artículos del inventario">
+                {% for articulo in articulos %}
+                <article
+                    class="inventory-card"
+                    data-id="{{ articulo.id }}"
+                    data-name="{{ articulo.nombre }}"
+                    data-code="{{ articulo.codigo }}"
+                    data-category="{{ articulo.categoria }}"
+                    data-description="{{ articulo.descripcion }}"
+                    data-location="{{ articulo.ubicacion }}"
+                    data-stock="{{ articulo.stock }}"
+                    data-unit="{{ articulo.unidad }}"
+                    data-image="{{ articulo.imagen_url }}"
+                    data-withdraw-url="{{ url_for('inventario.retirar_articulo', id_articulo=articulo.id) }}"
+                    data-delete-url="{{ url_for('inventario.eliminar_articulo', id_articulo=articulo.id) }}"
+                >
+                    <div class="item-image-wrap">
+                        <img
+                            class="item-image"
+                            src="{{ articulo.imagen_url }}"
+                            data-fallback="{{ url_for('static', filename='images/workshop-bg.jpg') }}"
+                            alt="{{ articulo.nombre }}"
+                            loading="lazy"
+                            decoding="async"
+                        >
+                        <span class="category-label">{{ articulo.categoria }}</span>
+                    </div>
+                    <div class="item-card-body">
+                        <h2>{{ articulo.nombre }}</h2>
+                        <div class="item-card-meta">
+                            <span class="stock-label{% if articulo.stock <= 5 %} is-low{% endif %}">
+                                <span class="stock-value">{{ articulo.stock }}</span>
+                                <span class="stock-unit">{{ articulo.unidad }} disponibles</span>
+                            </span>
+                            <div class="item-card-actions">
+                                <button class="more-button" type="button" aria-label="Ver más sobre {{ articulo.nombre }}">
+                                    Ver más
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M5 12h14m-6-6 6 6-6 6" />
+                                    </svg>
+                                </button>
+                                {% if es_admin %}
+                                <button class="delete-item" type="button" aria-label="Eliminar {{ articulo.nombre }}" title="Eliminar artículo">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
+                                    </svg>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            </section>
+            <p class="empty-search" id="empty-search" hidden>No hay artículos que coincidan con la búsqueda.</p>
+        </div>
+    </section>
+</main>
+
+<dialog class="item-dialog" id="item-dialog" aria-labelledby="dialog-title">
+    <button class="dialog-close" id="close-dialog" type="button" aria-label="Cerrar detalle">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="dialog-layout">
+        <img class="dialog-image" id="dialog-image" alt="">
+        <div class="dialog-content">
+            <p class="eyebrow" id="dialog-category"></p>
+            <h2 id="dialog-title"></h2>
+            <p class="dialog-description" id="dialog-description"></p>
+            <dl class="item-details">
+                <div><dt>Código</dt><dd id="dialog-code"></dd></div>
+                <div><dt>Ubicación</dt><dd id="dialog-location"></dd></div>
+                <div><dt>Stock actual</dt><dd id="dialog-stock"></dd></div>
+            </dl>
+            <form class="withdraw-form" id="withdraw-form">
+                <label for="withdraw-quantity">Unidades a retirar</label>
+                <div class="withdraw-controls">
+                    <input id="withdraw-quantity" name="cantidad" type="number" min="1" step="1" value="1" required>
+                    <button class="withdraw-button" id="withdraw-button" type="submit">Retirar objeto</button>
+                </div>
+                <p class="dialog-message" id="dialog-message" role="status" aria-live="polite" hidden></p>
+            </form>
+        </div>
+    </div>
+</dialog>
+
+{% if es_admin %}
+<dialog class="item-dialog admin-dialog" id="add-item-dialog" aria-labelledby="add-item-title">
+    <button class="dialog-close" id="close-add-item" type="button" aria-label="Cerrar formulario">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">GESTIÓN DE BODEGA</p>
+        <h2 id="add-item-title">Agregar artículo</h2>
+        <form id="create-item-form" data-create-url="{{ url_for('inventario.crear_articulo') }}" enctype="multipart/form-data">
+            <div class="admin-form-grid">
+                <label class="admin-field" for="new-item-name">
+                    <span>Nombre</span>
+                    <input id="new-item-name" name="nombre" type="text" maxlength="120" required>
+                </label>
+                <label class="admin-field" for="new-item-category">
+                    <span>Categoría</span>
+                    <input id="new-item-category" name="categoria" type="text" maxlength="60" value="General">
+                </label>
+                <label class="admin-field admin-field--full" for="new-item-description">
+                    <span>Descripción</span>
+                    <textarea id="new-item-description" name="descripcion" rows="3" maxlength="4000" required></textarea>
+                </label>
+                <label class="admin-field" for="new-item-stock">
+                    <span>Stock inicial</span>
+                    <input id="new-item-stock" name="stock" type="number" min="0" step="1" value="0" required>
+                </label>
+                <label class="admin-field" for="new-item-unit">
+                    <span>Unidad</span>
+                    <input id="new-item-unit" name="unidad" type="text" maxlength="24" value="unidades">
+                </label>
+                <label class="admin-field admin-field--full" for="new-item-location">
+                    <span>Ubicación</span>
+                    <input id="new-item-location" name="ubicacion" type="text" maxlength="80" placeholder="Ej. Estante A1">
+                </label>
+                <label class="admin-field admin-field--full" for="new-item-image">
+                    <span>Imagen del artículo</span>
+                    <input id="new-item-image" name="imagen" type="file" accept="image/jpeg,image/png,image/webp" required>
+                    <small>JPEG, PNG o WEBP; máximo 5 MB.</small>
+                </label>
+            </div>
+            <div class="image-preview-row">
+                <img id="new-item-preview" alt="Vista previa de la imagen" hidden>
+                <span id="new-item-file-name">Selecciona una imagen para previsualizarla.</span>
+            </div>
+            <p class="dialog-message" id="create-item-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="create-item-button" type="submit">Guardar artículo</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+</body>
+</html>

@@ -1,0 +1,1047 @@
+:root {
+    --blue: #0060aa;
+    --blue-dark: #004d8c;
+    --blue-brand: #054a86;
+    --label: #274765;
+    --panel-bg: rgba(245, 249, 253, 0.92);
+    --panel-border: rgba(255, 255, 255, 0.92);
+    --shadow: 0 24px 70px rgba(5, 20, 45, 0.42), 0 4px 18px rgba(0, 0, 0, 0.14);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    min-height: 100%;
+    margin: 0;
+}
+
+body {
+    min-height: 100vh;
+    color: var(--label);
+    background: #3b505d;
+    font-family: 'Barlow', sans-serif;
+}
+
+.dashboard-page {
+    position: relative;
+    display: flex;
+    min-height: 100vh;
+    justify-content: center;
+    padding: 32px;
+    background: url('../images/workshop-bg.jpg') center center / cover no-repeat fixed;
+    isolation: isolate;
+}
+
+.bg-overlay {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04) 0%, rgba(12, 28, 46, 0.46) 100%),
+        rgba(8, 22, 36, 0.22);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+.dashboard-shell {
+    width: min(100%, 1180px);
+    min-height: calc(100vh - 64px);
+    overflow: hidden;
+    border: 1.5px solid var(--panel-border);
+    border-radius: 18px;
+    background: var(--panel-bg);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    animation: appear 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes appear {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.dashboard-header {
+    display: flex;
+    min-height: 96px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px 34px;
+    border-bottom: 1px solid rgba(39, 71, 101, 0.14);
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.brand__logo {
+    width: 58px;
+    height: 58px;
+    object-fit: contain;
+}
+
+.brand__text {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand__name {
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 0.95;
+}
+
+.brand__sub {
+    margin-top: 4px;
+    color: #1d4d7a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+}
+
+.account-controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.account-name {
+    max-width: 240px;
+    overflow: hidden;
+    color: var(--label);
+    font-size: 15px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-logout {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 14px;
+    border: 1px solid rgba(0, 77, 140, 0.24);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.56);
+    color: var(--blue-dark);
+    font: 600 14px 'Barlow', sans-serif;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-logout:hover {
+    border-color: var(--blue);
+    background: #fff;
+}
+
+.btn-logout:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.btn-logout svg,
+.workspace-mark svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.dashboard-content {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: clamp(40px, 7vw, 78px) 48px 60px;
+}
+
+.eyebrow {
+    margin: 0 0 10px;
+    color: var(--blue);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.dashboard-content h1 {
+    margin: 0;
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1.05;
+}
+
+.welcome-message {
+    margin: 12px 0 34px;
+    font-size: 18px;
+}
+
+.workspace {
+    min-height: 220px;
+    padding: 30px;
+    border: 1px solid rgba(39, 71, 101, 0.16);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.workspace-mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 8px;
+    background: #e5f1fa;
+    color: var(--blue);
+}
+
+.workspace h2 {
+    margin: 18px 0 6px;
+    color: #194065;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.workspace p {
+    margin: 0;
+    color: #526b80;
+    font-size: 15px;
+}
+
+@media (max-width: 640px) {
+    .dashboard-page {
+        padding: 12px;
+        background-attachment: scroll;
+    }
+
+    .dashboard-shell {
+        min-height: calc(100vh - 24px);
+        border-radius: 14px;
+    }
+
+    .dashboard-header {
+        min-height: 78px;
+        padding: 12px 16px;
+    }
+
+    .brand {
+        gap: 8px;
+    }
+
+    .brand__logo {
+        width: 42px;
+        height: 42px;
+    }
+
+    .brand__name {
+        font-size: 24px;
+    }
+
+    .brand__sub {
+        font-size: 9px;
+    }
+
+    .account-controls {
+        gap: 8px;
+    }
+
+    .account-name {
+        display: none;
+    }
+
+    .btn-logout {
+        width: 42px;
+        padding: 0;
+    }
+
+    .btn-logout span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+
+    .dashboard-content {
+        padding: 42px 22px;
+    }
+
+    .dashboard-content h1 {
+        font-size: 40px;
+    }
+
+    .workspace {
+        min-height: 190px;
+        padding: 22px;
+    }
+}
+
+.dashboard-shell {
+    width: min(100%, 1380px);
+}
+
+.dashboard-content {
+    max-width: none;
+    padding: 38px clamp(22px, 4vw, 56px) 54px;
+}
+
+.inventory-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 26px;
+}
+
+.inventory-heading .welcome-message {
+    margin: 9px 0 0;
+    color: #526b80;
+    font-size: 16px;
+}
+
+.demo-notice {
+    flex: 0 0 auto;
+    margin-bottom: 5px;
+    padding: 7px 10px;
+    border-left: 3px solid #c18b34;
+    background: rgba(255, 247, 228, 0.82);
+    color: #77571f;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.inventory-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 26px;
+    border: 1px solid rgba(39, 71, 101, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.68);
+}
+
+.summary-item {
+    display: flex;
+    min-height: 78px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 20px;
+}
+
+.summary-item + .summary-item {
+    border-left: 1px solid rgba(39, 71, 101, 0.14);
+}
+
+.summary-item span {
+    color: #526b80;
+    font-size: 14px;
+}
+
+.summary-item strong {
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 27px;
+    line-height: 1;
+}
+
+.inventory-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.search-field {
+    display: flex;
+    width: min(100%, 420px);
+    min-height: 44px;
+    align-items: center;
+    gap: 10px;
+    padding: 0 13px;
+    border: 1px solid rgba(39, 71, 101, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.76);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-field:focus-within {
+    border-color: #4b9bd5;
+    box-shadow: 0 0 0 3px rgba(75, 155, 213, 0.18);
+}
+
+.search-field svg {
+    width: 19px;
+    height: 19px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: #526b80;
+    stroke-linecap: round;
+    stroke-width: 1.8;
+}
+
+.search-field input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #194065;
+    font: 500 15px 'Barlow', sans-serif;
+}
+
+.search-field input::placeholder {
+    color: #8094a4;
+}
+
+.results-count {
+    color: #526b80;
+    font-size: 13px;
+}
+
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.inventory-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(39, 71, 101, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 5px 16px rgba(5, 20, 45, 0.08);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.inventory-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(5, 20, 45, 0.13);
+}
+
+.item-image-wrap {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: #dce8ed;
+}
+
+.item-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.category-label {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    max-width: calc(100% - 20px);
+    overflow: hidden;
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: rgba(245, 249, 253, 0.93);
+    color: #194065;
+    font-size: 11px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-card-body {
+    padding: 14px 15px 13px;
+}
+
+.item-card-body h2 {
+    min-height: 48px;
+    margin: 0 0 12px;
+    color: #194065;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.item-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 11px;
+    border-top: 1px solid rgba(39, 71, 101, 0.12);
+}
+
+.stock-label {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px;
+    color: #39704c;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.stock-value {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.stock-label.is-low {
+    color: #a04d20;
+}
+
+.more-button {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 7px;
+    border: 0;
+    background: transparent;
+    color: var(--blue-dark);
+    font: 700 13px 'Barlow', sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.more-button:hover {
+    color: var(--blue);
+}
+
+.more-button svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+    transition: transform 0.18s ease;
+}
+
+.more-button:hover svg {
+    transform: translateX(2px);
+}
+
+.empty-search {
+    margin: 0;
+    padding: 32px 16px;
+    border: 1px dashed rgba(39, 71, 101, 0.28);
+    border-radius: 8px;
+    color: #526b80;
+    text-align: center;
+}
+
+.item-dialog {
+    position: relative;
+    width: min(900px, calc(100% - 32px));
+    max-width: 900px;
+    max-height: min(760px, calc(100% - 32px));
+    padding: 0;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    background: #f5f9fd;
+    color: var(--label);
+    box-shadow: 0 24px 70px rgba(5, 20, 45, 0.42);
+}
+
+.item-dialog::backdrop {
+    background: rgba(8, 22, 36, 0.72);
+    backdrop-filter: blur(3px);
+}
+
+.dialog-close {
+    position: absolute;
+    z-index: 1;
+    top: 12px;
+    right: 12px;
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid rgba(39, 71, 101, 0.15);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #274765;
+    cursor: pointer;
+}
+
+.dialog-close:hover {
+    background: #eaf4fd;
+}
+
+.dialog-close svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 1.8;
+}
+
+.dialog-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.9fr) minmax(300px, 1.1fr);
+    min-height: 480px;
+}
+
+.dialog-image {
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+    object-fit: cover;
+    background: #dce8ed;
+}
+
+.dialog-content {
+    padding: 38px 34px 30px;
+}
+
+.dialog-content .eyebrow {
+    margin: 0 48px 8px 0;
+    font-size: 12px;
+}
+
+.dialog-content h2 {
+    margin: 0;
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.08;
+}
+
+.dialog-description {
+    margin: 12px 0 18px;
+    color: #526b80;
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.item-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 0 0 22px;
+    padding: 14px 0;
+    border-top: 1px solid rgba(39, 71, 101, 0.14);
+    border-bottom: 1px solid rgba(39, 71, 101, 0.14);
+}
+
+.item-details div:last-child {
+    grid-column: 1 / -1;
+}
+
+.item-details dt {
+    margin-bottom: 3px;
+    color: #6a8092;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.item-details dd {
+    margin: 0;
+    color: #194065;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.withdraw-form > label {
+    display: block;
+    margin-bottom: 7px;
+    color: #274765;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.withdraw-controls {
+    display: flex;
+    gap: 9px;
+}
+
+.withdraw-controls input {
+    width: 100px;
+    min-width: 0;
+    height: 44px;
+    padding: 0 10px;
+    border: 1px solid rgba(39, 71, 101, 0.26);
+    border-radius: 7px;
+    background: #fff;
+    color: #194065;
+    font: 600 16px 'Barlow', sans-serif;
+}
+
+.withdraw-controls input:focus-visible,
+.btn-logout:focus-visible,
+.more-button:focus-visible,
+.withdraw-button:focus-visible,
+.dialog-close:focus-visible {
+    outline: 3px solid rgba(75, 155, 213, 0.48);
+    outline-offset: 2px;
+}
+
+.withdraw-button {
+    min-height: 44px;
+    flex: 1;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--blue);
+    color: #fff;
+    font: 700 14px 'Barlow', sans-serif;
+    cursor: pointer;
+    transition: background 0.18s;
+}
+
+.withdraw-button:hover:not(:disabled) {
+    background: var(--blue-dark);
+}
+
+.withdraw-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.dialog-message {
+    margin: 10px 0 0;
+    color: #39704c;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.dialog-message[data-state="error"] {
+    color: #a2322b;
+}
+
+@media (max-width: 900px) {
+    .inventory-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .dashboard-content {
+        padding: 32px 18px 36px;
+    }
+
+    .inventory-heading {
+        display: block;
+        margin-bottom: 20px;
+    }
+
+    .inventory-heading .welcome-message {
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .demo-notice {
+        display: inline-block;
+        margin-top: 14px;
+    }
+
+    .inventory-summary {
+        margin-bottom: 20px;
+    }
+
+    .summary-item {
+        min-height: 68px;
+        display: block;
+        padding: 12px 10px;
+    }
+
+    .summary-item span {
+        display: block;
+        min-height: 30px;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+
+    .summary-item strong {
+        font-size: 23px;
+    }
+
+    .inventory-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .search-field {
+        width: 100%;
+    }
+
+    .inventory-grid {
+        grid-template-columns: 1fr;
+        gap: 13px;
+    }
+
+    .item-image-wrap {
+        aspect-ratio: 16 / 9;
+    }
+
+    .item-card-body h2 {
+        min-height: 0;
+    }
+
+    .dialog-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .dialog-image {
+        height: 210px;
+        min-height: 0;
+    }
+
+    .dialog-content {
+        padding: 24px 20px 22px;
+    }
+
+    .dialog-content h2 {
+        font-size: 30px;
+    }
+}
+
+.role-label {
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: #e5f1fa;
+    color: var(--blue-dark);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.inventory-heading-actions {
+    display: flex;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-add-item {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 15px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--blue);
+    color: #fff;
+    font: 700 14px 'Barlow', sans-serif;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.18s;
+}
+
+.btn-add-item:hover {
+    transform: translateY(-1px);
+    background: var(--blue-dark);
+}
+
+.btn-add-item svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 2;
+}
+
+.item-card-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.delete-item {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #9b3d36;
+    cursor: pointer;
+    transition: background 0.18s;
+}
+
+.delete-item:hover {
+    background: #fff0ef;
+}
+
+.delete-item svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+.btn-add-item:focus-visible,
+.delete-item:focus-visible {
+    outline: 3px solid rgba(75, 155, 213, 0.48);
+    outline-offset: 2px;
+}
+
+.admin-dialog {
+    width: min(660px, calc(100% - 32px));
+    max-width: 660px;
+}
+
+.admin-dialog-content {
+    padding: 32px;
+}
+
+.admin-dialog-content > .eyebrow {
+    margin-bottom: 7px;
+}
+
+.admin-dialog-content h2 {
+    margin: 0 44px 22px 0;
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.05;
+}
+
+.admin-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+.admin-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 6px;
+    color: #274765;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-field--full {
+    grid-column: 1 / -1;
+}
+
+.admin-field input,
+.admin-field textarea {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid rgba(39, 71, 101, 0.24);
+    border-radius: 6px;
+    background: #fff;
+    color: #194065;
+    font: 500 14px 'Barlow', sans-serif;
+}
+
+.admin-field input:focus,
+.admin-field textarea:focus {
+    border-color: #4b9bd5;
+    outline: 3px solid rgba(75, 155, 213, 0.16);
+}
+
+.admin-field textarea {
+    min-height: 88px;
+    resize: vertical;
+}
+
+.admin-field input[type="file"] {
+    min-height: 46px;
+    padding: 7px;
+    font-size: 12px;
+}
+
+.admin-field small {
+    color: #6a8092;
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.image-preview-row {
+    display: flex;
+    min-height: 62px;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    color: #6a8092;
+    font-size: 12px;
+}
+
+.image-preview-row img {
+    width: 76px;
+    height: 58px;
+    flex: 0 0 auto;
+    border-radius: 5px;
+    object-fit: cover;
+    background: #dce8ed;
+}
+
+.admin-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.admin-form-actions .withdraw-button {
+    flex: 0 0 auto;
+    min-width: 170px;
+}
+
+.admin-form-actions .withdraw-button:disabled {
+    cursor: wait;
+}
+
+@media (max-width: 640px) {
+    .account-controls {
+        gap: 7px;
+    }
+
+    .role-label {
+        display: none;
+    }
+
+    .inventory-heading-actions {
+        align-items: flex-start;
+        margin-top: 16px;
+    }
+
+    .admin-dialog-content {
+        padding: 26px 20px 22px;
+    }
+
+    .admin-form-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .admin-field--full {
+        grid-column: auto;
+    }
+
+    .admin-form-actions .withdraw-button {
+        width: 100%;
+    }
+}

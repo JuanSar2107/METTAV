@@ -9,6 +9,7 @@ class Usuario(db.Model):
     id_usuario = db.Column(db.Integer, primary_key=True)
     usuario = db.Column(db.String(80), unique=True, nullable=False)
     contrasena_hash = db.Column(db.String(256), nullable=False)
+    es_admin = db.Column(db.Boolean, nullable=False, default=False)
 
     def establecer_contrasena(self, contrasena: str) -> None:
         self.contrasena_hash = generate_password_hash(contrasena)
