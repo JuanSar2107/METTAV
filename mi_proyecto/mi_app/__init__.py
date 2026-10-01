@@ -26,11 +26,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     db.init_app(app)
     from .routes.inventory import inventario_bp
     from .routes.users import usuarios_bp
-    from .docs import docs_bp
 
     app.register_blueprint(inventario_bp)
     app.register_blueprint(usuarios_bp)
-    app.register_blueprint(docs_bp)
 
     @app.get('/health')
     def health():
