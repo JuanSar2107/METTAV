@@ -24,13 +24,20 @@ def create_app(test_config: dict | None = None) -> Flask:
         app.config.update(test_config)
 
     db.init_app(app)
-    from .routes.main import main_bp
     from .routes.inventory import inventario_bp
     from .routes.users import usuarios_bp
 
-    app.register_blueprint(main_bp)
     app.register_blueprint(inventario_bp)
     app.register_blueprint(usuarios_bp)
+
+    @app.get('/health')
+    def health():
+        return {'status': 'ok'}
+
+    # En el despliegue API_ONLY no se publican login, dashboard ni plantillas.
+    if os.getenv("API_ONLY", "0") != "1":
+        from .routes.main import main_bp
+        app.register_blueprint(main_bp)
 
     with app.app_context():
         db.create_all()
