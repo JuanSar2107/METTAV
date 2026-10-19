@@ -1,0 +1,10 @@
+# Archivos y carpetas que NO deben entrar a la imagen de Docker
+.git
+.gitattributes
+.gitignore
+**/__pycache__/
+**/*.pyc
+instance/
+docker-compose*.yml
+Dockerfile
+.dockerignore

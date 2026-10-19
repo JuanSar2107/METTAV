@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from flask import Flask, jsonify
@@ -11,7 +12,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     database_path = Path(app.root_path).parent / "instance" / "mi_proyecto.sqlite3"
     database_path.parent.mkdir(parents=True, exist_ok=True)
     app.config.from_mapping(
-        SECRET_KEY="mettav-dev-key-2026",
+        SECRET_KEY=os.environ.get("SECRET_KEY", "mettav-dev-key-2026"),
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{database_path}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,

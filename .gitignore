@@ -37,3 +37,9 @@ desktop.ini
 dist/
 build/
 *.egg-info/
+
+# Test y calidad
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/

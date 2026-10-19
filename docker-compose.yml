@@ -1,0 +1,34 @@
+# Docker Compose para METTAV
+# Ideal para desplegar en Coolify (lee este archivo automáticamente desde la raíz del repo).
+#
+# Variables de entorno opcionales (configúralas como "Variables" en Coolify):
+#   SECRET_KEY  -> clave secreta de Flask (¡cámbiala en producción!)
+#   APP_PORT    -> puerto del host donde se publica la app (por defecto 8000)
+
+services:
+  web:
+    build:
+      context: ./mi_proyecto
+      dockerfile: Dockerfile
+    image: mettav:latest
+    container_name: mettav-web
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+    ports:
+      - "${APP_PORT:-8000}:5000"
+    volumes:
+      # Persistencia de la base de datos SQLite
+      - mettav_data:/app/instance
+      # Persistencia de las imágenes subidas (inventario y perfiles)
+      - mettav_images:/app/mi_app/static/images
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mettav_data:
+  mettav_images:
