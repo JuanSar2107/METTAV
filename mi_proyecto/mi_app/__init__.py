@@ -7,6 +7,36 @@ from sqlalchemy import inspect, text
 from .extensions import db
 
 
+def _sembrar_admin(app: Flask) -> None:
+    """Crea el primer administrador si la base de datos aún no tiene uno.
+
+    Se controla con las variables de entorno ADMIN_USER (por defecto "admin")
+    y ADMIN_PASSWORD. Nunca sobrescribe un usuario que ya exista, por lo que
+    los reinicios y los redespliegues no cambian la contraseña vigente.
+    """
+    nombre = (os.environ.get("ADMIN_USER") or "admin").strip()
+    clave = os.environ.get("ADMIN_PASSWORD") or ""
+
+    if not clave:
+        # Solo avisa si alguien configuró el usuario sin definir la clave.
+        if os.environ.get("ADMIN_USER"):
+            app.logger.warning(
+                "ADMIN_USER está definido pero falta ADMIN_PASSWORD: no se crea el administrador."
+            )
+        return
+
+    from .models import Usuario
+
+    if Usuario.query.filter_by(usuario=nombre).first() is not None:
+        return
+
+    usuario = Usuario(usuario=nombre, es_admin=True)
+    usuario.establecer_contrasena(clave)
+    db.session.add(usuario)
+    db.session.commit()
+    app.logger.info("Administrador inicial '%s' creado.", nombre)
+
+
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     database_path = Path(app.root_path).parent / "instance" / "mi_proyecto.sqlite3"
@@ -69,6 +99,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                             f"ON usuarios ({column_name})"
                         )
                     )
+
+        _sembrar_admin(app)
 
     @app.errorhandler(413)
     def archivo_supera_limite(_error):
