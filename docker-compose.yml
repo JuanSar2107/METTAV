@@ -6,7 +6,10 @@
 #   ADMIN_USER     -> nombre del primer administrador (por defecto: admin)
 #   ADMIN_PASSWORD -> contraseña del primer administrador; solo se usa si ese
 #                     usuario todavía no existe en la base de datos
-#   APP_PORT       -> puerto del host donde se publica la app (por defecto 8000)
+#
+# Este archivo NO publica puertos del host: Coolify rutea el tráfico desde su
+# proxy hacia el puerto 5000 del contenedor (configúralo en "Ports Exposes").
+# Si quieres correrlo en Docker sin Coolify, usa docker-compose.local.yml.
 
 services:
   web:
@@ -20,8 +23,12 @@ services:
       SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-    ports:
-      - "${APP_PORT:-8000}:5000"
+    # Coolify expone el servicio a través de su propio proxy (dominio + HTTPS),
+    # así que NO se publica ningún puerto del host. De lo contrario aparece:
+    #   Bind for :::8000 failed: port is already allocated
+    # En Coolify, configura "Ports Exposes" = 5000.
+    expose:
+      - "5000"
     volumes:
       # Persistencia de la base de datos SQLite
       - mettav_data:/app/instance

@@ -1,0 +1,39 @@
+# Docker Compose para correr METTAV en LOCAL (sin Coolify).
+#
+# Uso explícito, nunca se carga automático (por eso no se llama "override"):
+#   docker compose -f docker-compose.local.yml up --build
+#   http://127.0.0.1:8000
+#
+# Es un archivo autocontenido: duplica `docker-compose.yml` a propósito, porque
+# `extends` de Compose no hereda las definiciones de `volumes` del otro archivo.
+# Coolify solo lee `docker-compose.yml`, así que esto no afecta al servidor.
+
+services:
+  web:
+    build:
+      context: ./mi_proyecto
+      dockerfile: Dockerfile
+    image: mettav:latest
+    container_name: mettav-web
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "${APP_PORT:-8000}:5000"
+    volumes:
+      - mettav_data:/app/instance
+      - mettav_profiles:/app/mi_app/static/images/profiles
+      - mettav_inventory:/app/mi_app/static/images/inventory
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mettav_data:
+  mettav_profiles:
+  mettav_inventory:
