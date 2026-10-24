@@ -1,9 +1,26 @@
-from flask import Blueprint, redirect, render_template, session, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template, session, url_for
 
 from mi_app.extensions import db
 from mi_app.models import ArticuloInventario, ConfiguracionSistema, Usuario
 
 main_bp = Blueprint('main', __name__)
+
+_DESCRIPCIONES_RUTAS = {
+    "main.login": "Muestra la pantalla de inicio de sesión.",
+    "main.dashboard": "Muestra el inventario del usuario autenticado.",
+    "main.docs": "Devuelve la documentación JSON de todas las rutas registradas.",
+    "usuarios.registrar_usuario": "Crea una cuenta de usuario normal; requiere sesión de administrador.",
+    "usuarios.iniciar_sesion": "Valida las credenciales y crea la sesión del usuario.",
+    "usuarios.cerrar_sesion": "Cierra la sesión actual.",
+    "usuarios.obtener_usuario_actual": "Devuelve los datos del usuario autenticado.",
+    "usuarios.actualizar_perfil": "Actualiza el perfil y la imagen del usuario autenticado.",
+    "usuarios.actualizar_usuario_actual": "Actualiza el nombre de usuario o la contraseña propios.",
+    "usuarios.eliminar_usuario_actual": "Elimina la cuenta autenticada y cierra su sesión.",
+    "inventario.crear_articulo": "Crea un artículo del inventario; requiere sesión de administrador.",
+    "inventario.eliminar_articulo": "Elimina un artículo; requiere sesión de administrador.",
+    "inventario.retirar_articulo": "Retira unidades del stock de un artículo autenticado.",
+    "static": "Entrega archivos estáticos de la aplicación.",
+}
 
 _INVENTARIO_INICIAL = [
     {
@@ -100,3 +117,24 @@ def dashboard():
         articulos=articulos,
         es_admin=usuario.es_admin,
     )
+
+
+@main_bp.get('/docs')
+def docs():
+    """Describe en JSON todas las rutas activas de Flask."""
+    rutas = []
+    for regla in current_app.url_map.iter_rules():
+        vista = current_app.view_functions[regla.endpoint]
+        rutas.append({
+            "ruta": regla.rule,
+            "metodos": sorted(regla.methods - {"HEAD", "OPTIONS"}),
+            "endpoint": regla.endpoint,
+            "funcion": vista.__name__,
+            "descripcion": _DESCRIPCIONES_RUTAS.get(
+                regla.endpoint,
+                vista.__doc__ or "Sin descripción disponible.",
+            ),
+        })
+
+    rutas.sort(key=lambda ruta: (ruta["ruta"], ruta["metodos"], ruta["endpoint"]))
+    return jsonify(documentacion="Rutas de la aplicación METTAV", rutas=rutas)

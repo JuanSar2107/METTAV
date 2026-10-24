@@ -1,0 +1,43 @@
+# Docker Compose para METTAV
+# Ideal para desplegar en Coolify (lee este archivo automáticamente desde la raíz del repo).
+#
+# Variables de entorno opcionales (configúralas como "Variables" en Coolify):
+#   SECRET_KEY     -> clave secreta de Flask (¡cámbiala en producción!)
+#   ADMIN_USER     -> nombre del primer administrador (por defecto: admin)
+#   ADMIN_PASSWORD -> contraseña del primer administrador; solo se usa si ese
+#                     usuario todavía no existe en la base de datos
+#   APP_PORT       -> puerto del host donde se publica la app (por defecto 8000)
+
+services:
+  web:
+    build:
+      context: ./mi_proyecto
+      dockerfile: Dockerfile
+    image: mettav:latest
+    container_name: mettav-web
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "${APP_PORT:-8000}:5000"
+    volumes:
+      # Persistencia de la base de datos SQLite
+      - mettav_data:/app/instance
+      # Persistencia de las imágenes SUBIDAS por los usuarios.
+      # Se montan solo las dos subcarpetas: si se montara /static/images entero,
+      # un volumen vacío taparía el logo y el fondo que vienen en la imagen.
+      - mettav_profiles:/app/mi_app/static/images/profiles
+      - mettav_inventory:/app/mi_app/static/images/inventory
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mettav_data:
+  mettav_profiles:
+  mettav_inventory:

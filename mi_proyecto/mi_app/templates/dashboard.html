@@ -25,6 +25,25 @@
                 </span>
             </a>
             <div class="account-controls">
+                <button
+                    class="profile-trigger"
+                    id="profile-trigger"
+                    type="button"
+                    aria-label="Editar mi perfil"
+                    aria-haspopup="dialog"
+                    aria-controls="profile-dialog"
+                    title="Editar mi perfil"
+                >
+                    <img
+                        class="profile-trigger-image{% if not usuario.imagen_perfil %} is-hidden{% endif %}"
+                        id="profile-trigger-image"
+                        src="{{ usuario.imagen_perfil or '' }}"
+                        alt=""
+                    >
+                    <span class="profile-trigger-initials{% if usuario.imagen_perfil %} is-hidden{% endif %}" id="profile-trigger-initials">
+                        {{ (usuario.nombre_completo or usuario.usuario)[:1]|upper }}
+                    </span>
+                </button>
                 <span class="account-name">{{ usuario.usuario }}</span>
                 {% if es_admin %}<span class="role-label">Administrador</span>{% endif %}
                 <button class="btn-logout" id="logout-button" type="button" aria-label="Cerrar sesión" title="Cerrar sesión">
@@ -45,14 +64,21 @@
                 </div>
                 <div class="inventory-heading-actions">
                     {% if es_admin %}
-                    <button class="btn-add-item" id="open-add-item" type="button">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M12 5v14M5 12h14" />
-                        </svg>
-                        <span>Agregar artículo</span>
-                    </button>
+                    <div class="admin-action-buttons">
+                        <button class="btn-add-item" id="open-add-item" type="button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" />
+                            </svg>
+                            <span>Agregar artículo</span>
+                        </button>
+                        <button class="btn-add-user" id="open-add-user" type="button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-2v6m-3-3h6" />
+                            </svg>
+                            <span>Agregar usuario nuevo</span>
+                        </button>
+                    </div>
                     {% endif %}
-                    <span class="demo-notice">Inventario inicial de ejemplo</span>
                 </div>
             </div>
 
@@ -170,7 +196,95 @@
     </div>
 </dialog>
 
+<dialog class="item-dialog profile-dialog" id="profile-dialog" aria-labelledby="profile-title">
+    <button class="dialog-close" id="close-profile" type="button" aria-label="Cerrar perfil">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="profile-dialog-content">
+        <p class="eyebrow">CUENTA PERSONAL</p>
+        <h2 id="profile-title">Mi perfil</h2>
+        <form id="profile-form" data-profile-url="{{ url_for('usuarios.actualizar_perfil') }}" enctype="multipart/form-data">
+            <div class="profile-photo-row">
+                <div class="profile-photo-preview" aria-hidden="true">
+                    <img
+                        id="profile-image-preview"
+                        src="{{ usuario.imagen_perfil or '' }}"
+                        alt=""
+                        {% if not usuario.imagen_perfil %}hidden{% endif %}
+                    >
+                    <span id="profile-image-initials" {% if usuario.imagen_perfil %}hidden{% endif %}>
+                        {{ (usuario.nombre_completo or usuario.usuario)[:1]|upper }}
+                    </span>
+                </div>
+                <div class="profile-image-controls">
+                    <label for="profile-image-input">Foto de perfil</label>
+                    <input id="profile-image-input" name="imagen_perfil" type="file" accept="image/jpeg,image/png,image/webp">
+                    <small>JPEG, PNG o WEBP; máximo 5 MB.</small>
+                </div>
+            </div>
+
+            <div class="profile-form-grid">
+                <label class="profile-field" for="profile-full-name">
+                    <span>Nombre completo</span>
+                    <input id="profile-full-name" name="nombre_completo" type="text" maxlength="120" value="{{ usuario.nombre_completo or '' }}" autocomplete="name">
+                </label>
+                <label class="profile-field" for="profile-email">
+                    <span>Correo electrónico</span>
+                    <input id="profile-email" name="correo" type="email" maxlength="254" value="{{ usuario.correo or '' }}" autocomplete="email">
+                </label>
+                <label class="profile-field" for="profile-identity">
+                    <span>Número de identidad</span>
+                    <input id="profile-identity" name="numero_identidad" type="text" maxlength="32" value="{{ usuario.numero_identidad or '' }}" autocomplete="off">
+                </label>
+                <label class="profile-field" for="profile-phone">
+                    <span>Teléfono</span>
+                    <input id="profile-phone" name="telefono" type="tel" maxlength="32" value="{{ usuario.telefono or '' }}" autocomplete="tel">
+                </label>
+                <label class="profile-field profile-field--full" for="profile-address">
+                    <span>Dirección</span>
+                    <input id="profile-address" name="direccion" type="text" maxlength="255" value="{{ usuario.direccion or '' }}" autocomplete="street-address">
+                </label>
+            </div>
+            <p class="dialog-message" id="profile-message" role="status" aria-live="polite" hidden></p>
+            <div class="profile-form-actions">
+                <button class="withdraw-button" id="profile-save-button" type="submit">Guardar perfil</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
 {% if es_admin %}
+<dialog class="item-dialog admin-dialog" id="add-user-dialog" aria-labelledby="add-user-title">
+    <button class="dialog-close" id="close-add-user" type="button" aria-label="Cerrar formulario">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">ADMINISTRACIÓN</p>
+        <h2 id="add-user-title">Agregar usuario nuevo</h2>
+        <form id="create-user-form" data-create-url="{{ url_for('usuarios.registrar_usuario') }}">
+            <div class="admin-form-grid">
+                <label class="admin-field admin-field--full" for="new-user-name">
+                    <span>Nombre de usuario</span>
+                    <input id="new-user-name" name="usuario" type="text" maxlength="80" autocomplete="off" required>
+                </label>
+                <label class="admin-field admin-field--full" for="new-user-password">
+                    <span>Contraseña</span>
+                    <input id="new-user-password" name="contrasena" type="password" minlength="4" maxlength="256" autocomplete="new-password" required>
+                </label>
+            </div>
+            <p class="role-note">La cuenta se creará como usuario normal, sin permisos de administrador.</p>
+            <p class="dialog-message" id="create-user-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="create-user-button" type="submit">Crear usuario</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
 <dialog class="item-dialog admin-dialog" id="add-item-dialog" aria-labelledby="add-item-title">
     <button class="dialog-close" id="close-add-item" type="button" aria-label="Cerrar formulario">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -224,6 +338,13 @@
     </div>
 </dialog>
 {% endif %}
+
+<div class="action-toast" id="action-toast" role="status" aria-live="polite" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m5 12 4 4L19 6" />
+    </svg>
+    <span id="action-toast-message"></span>
+</div>
 
 <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
 </body>

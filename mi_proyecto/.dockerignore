@@ -1,0 +1,16 @@
+# Archivos y carpetas que NO deben entrar a la imagen de Docker
+.git
+.gitattributes
+.gitignore
+.venv/
+**/__pycache__/
+**/*.pyc
+*.pyo
+.pytest_cache/
+instance/
+tests/
+pytest.ini
+requirements-dev.txt
+docker-compose*.yml
+Dockerfile
+.dockerignore
