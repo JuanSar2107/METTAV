@@ -186,20 +186,25 @@ html, body {
     letter-spacing: 0.08em;
 }
 
+.input-wrap input[type="password"]::-ms-reveal,
+.input-wrap input[type="password"]::-ms-clear {
+    display: none;
+}
+
 .btn-toggle-password {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 42px;
+    width: 46px;
     height: 100%;
     flex-shrink: 0;
     border: none;
+    border-left: 1px solid rgba(184, 214, 240, 0.7);
     background: transparent;
     color: #4b6a8a;
     cursor: pointer;
     padding: 0;
-    margin-right: 4px;
-    border-radius: 6px;
+    margin: 0;
     transition: color 0.18s, background 0.18s;
 }
 
@@ -214,6 +219,7 @@ html, body {
 }
 
 .btn-toggle-password svg {
+    display: block;
     width: 20px;
     height: 20px;
     stroke: currentColor;
@@ -221,6 +227,10 @@ html, body {
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+}
+
+.btn-toggle-password svg[hidden] {
+    display: none;
 }
 
 /* ── Opciones ────────────────────────────────────────── */

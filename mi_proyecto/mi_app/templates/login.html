@@ -51,7 +51,7 @@
                         <img src="{{ url_for('static', filename='images/lock.svg') }}" alt="" aria-hidden="true">
                     </span>
                     <input id="password" name="contrasena" type="password" placeholder="••••••••••" autocomplete="current-password" required>
-                    <button type="button" class="btn-toggle-password" id="toggle-password" aria-label="Mostrar contraseña" title="Mostrar contraseña">
+                    <button type="button" class="btn-toggle-password" id="toggle-password" aria-label="Mostrar contraseña" aria-controls="password" aria-pressed="false" title="Mostrar contraseña">
                         <svg class="eye-icon eye-icon--show" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                             <circle cx="12" cy="12" r="3"/>

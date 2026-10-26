@@ -25,6 +25,7 @@
             password.type = isPassword ? "text" : "password";
             togglePasswordBtn.setAttribute("aria-label", isPassword ? "Ocultar contraseña" : "Mostrar contraseña");
             togglePasswordBtn.setAttribute("title", isPassword ? "Ocultar contraseña" : "Mostrar contraseña");
+            togglePasswordBtn.setAttribute("aria-pressed", String(isPassword));
             if (eyeShow && eyeHide) {
                 eyeShow.hidden = isPassword;
                 eyeHide.hidden = !isPassword;

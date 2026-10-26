@@ -534,26 +534,33 @@
         </svg>
     </button>
     <div class="dialog-layout user-dialog-layout">
-        <div class="user-dialog-photo-wrap">
-            <img class="user-dialog-photo" id="user-detail-photo" alt="" hidden>
-            <div class="user-dialog-fallback" id="user-detail-fallback" aria-hidden="true"></div>
-        </div>
-        <div class="dialog-content">
-            <div class="user-dialog-header-meta">
-                <p class="eyebrow">FICHA DE USUARIO / EMPLEADO</p>
+        <aside class="user-dialog-profile">
+            <div class="user-dialog-avatar">
+                <img class="user-dialog-photo" id="user-detail-photo" alt="" hidden>
+                <div class="user-dialog-fallback" id="user-detail-fallback" aria-hidden="true"></div>
+            </div>
+            <div class="user-dialog-identity">
+                <h2 id="user-detail-name"></h2>
+                <p class="user-dialog-handle" id="user-detail-handle"></p>
                 <span class="user-role-badge" id="user-detail-badge"></span>
             </div>
-            <h2 id="user-detail-name"></h2>
-            <p class="user-dialog-handle" id="user-detail-handle"></p>
-
+            <div class="user-dialog-summary">
+                <div class="user-dialog-summary-item">
+                    <span class="user-dialog-summary-label">Rol de acceso</span>
+                    <p class="user-dialog-summary-value" id="user-detail-role-desc"></p>
+                </div>
+                <div class="user-dialog-summary-item">
+                    <span class="user-dialog-summary-label">Cuenta</span>
+                    <p class="user-dialog-summary-value user-account-state">Registrada</p>
+                </div>
+            </div>
+        </aside>
+        <div class="dialog-content user-dialog-content">
+            <p class="eyebrow">INFORMACIÓN PERSONAL</p>
             <dl class="item-details user-detail-specs">
                 <div>
                     <dt>Nombre de usuario</dt>
                     <dd id="user-detail-username"></dd>
-                </div>
-                <div>
-                    <dt>Rol en la empresa</dt>
-                    <dd id="user-detail-role-desc"></dd>
                 </div>
                 <div>
                     <dt>N° de Identificación</dt>

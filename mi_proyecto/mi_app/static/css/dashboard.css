@@ -1682,23 +1682,45 @@ body {
 }
 
 /* Modal de detalle de usuario */
-.user-dialog-layout {
-    display: grid;
-    grid-template-columns: minmax(220px, 0.75fr) minmax(320px, 1.25fr);
-    min-height: 420px;
+.user-detail-dialog {
+    width: min(760px, calc(100% - 32px));
+    max-width: 760px;
 }
 
-.user-dialog-photo-wrap {
-    width: 100%;
-    height: 100%;
-    min-height: 420px;
+.user-dialog-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.72fr) minmax(320px, 1.28fr);
+    min-height: 360px;
+}
+
+.user-dialog-profile {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 42px 24px 26px;
+    background: #e7f0f4;
+    text-align: center;
+}
+
+.user-dialog-avatar {
+    display: grid;
+    width: 84px;
+    height: 84px;
+    flex: 0 0 auto;
+    place-items: center;
+    overflow: hidden;
+    border: 3px solid #fff;
+    border-radius: 50%;
     background: #dce8ed;
+    box-shadow: 0 3px 12px rgba(20, 55, 80, 0.14);
 }
 
 .user-dialog-photo {
     width: 100%;
     height: 100%;
-    min-height: 420px;
+    border-radius: 50%;
     object-fit: cover;
 }
 
@@ -1707,31 +1729,78 @@ body {
     place-items: center;
     width: 100%;
     height: 100%;
-    min-height: 420px;
     color: var(--blue-dark);
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 88px;
+    font-size: 42px;
     font-weight: 800;
     background: linear-gradient(145deg, #dce8ed 0%, #b8d4e4 100%);
 }
 
-.user-dialog-header-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 6px;
+.user-dialog-photo[hidden],
+.user-dialog-fallback[hidden] {
+    display: none;
 }
 
-.user-dialog-header-meta .eyebrow {
+.user-dialog-identity {
+    min-width: 0;
+}
+
+.user-dialog-identity h2 {
     margin: 0;
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
 }
 
 .user-dialog-handle {
-    margin: 2px 0 16px;
+    margin: 4px 0 10px;
     color: #6a8092;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
+}
+
+.user-dialog-summary {
+    display: grid;
+    width: 100%;
+    gap: 12px;
+    margin-top: auto;
+    text-align: left;
+}
+
+.user-dialog-summary-item {
+    display: grid;
+    gap: 3px;
+}
+
+.user-dialog-summary-label {
+    color: #6a8092;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.user-dialog-summary-value {
+    margin: 0;
+    color: #274765;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.user-account-state {
+    color: #39704c;
+}
+
+.user-dialog-content {
+    padding-top: 42px;
+}
+
+.user-dialog-content > .eyebrow {
+    margin: 0 48px 12px 0;
 }
 
 .user-detail-specs {
@@ -1757,10 +1826,23 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .user-dialog-photo-wrap,
-    .user-dialog-fallback {
-        min-height: 220px;
-        height: 220px;
+    .user-dialog-profile {
+        gap: 10px;
+        padding: 24px 20px 20px;
+    }
+
+    .user-dialog-avatar {
+        width: 76px;
+        height: 76px;
+    }
+
+    .user-dialog-summary {
+        max-width: 320px;
+        margin-top: 4px;
+    }
+
+    .user-dialog-content {
+        padding: 26px 20px 22px;
     }
 }
-
+
