@@ -73,6 +73,13 @@
                     <span>Usuarios y Empleados</span>
                     <span class="tab-badge" id="badge-users-count">{{ usuarios_registrados|length }}</span>
                 </button>
+                <button type="button" class="tab-button" id="tab-btn-movements" data-target="section-movements">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+                        <path d="M3 3v5h5m4-1v5l3 2" />
+                    </svg>
+                    <span>Historial</span>
+                </button>
             </nav>
             {% endif %}
 
@@ -330,6 +337,57 @@
                     {% endfor %}
                 </div>
                 <p class="empty-search" id="empty-users-search" hidden>No se encontraron usuarios que coincidan con la búsqueda.</p>
+            </div>
+
+            <div id="section-movements" class="dashboard-tab-panel is-hidden">
+                <div class="movement-history" id="movement-history" data-movements-url="{{ url_for('inventario.listar_movimientos') }}">
+                    <div class="inventory-heading movement-history-heading">
+                        <div>
+                            <p class="eyebrow">REGISTRO DE BODEGA</p>
+                            <h2 class="section-heading-title">Historial de movimientos</h2>
+                            <p class="welcome-message">Ingresos y retiros de herramientas y materiales.</p>
+                        </div>
+                        <span class="results-count" id="movement-results-count" aria-live="polite"></span>
+                    </div>
+                    <div class="movement-filters" id="movement-filters" hidden>
+                        <label class="search-field" for="movement-search">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7" />
+                                <path d="m20 20-4-4" />
+                            </svg>
+                            <input id="movement-search" type="search" placeholder="Buscar empleado, usuario o herramienta" autocomplete="off">
+                        </label>
+                        <label class="movement-date-filter" for="movement-category-filter">
+                            <span>Categoría</span>
+                            <select id="movement-category-filter" class="category-filter-select" aria-label="Filtrar movimientos por categoría">
+                                <option value="">Todas las categorías</option>
+                            </select>
+                        </label>
+                        <label class="movement-date-filter" for="movement-date">
+                            <span>Día</span>
+                            <input id="movement-date" type="date">
+                        </label>
+                        <button class="movement-filter-reset" id="movement-filter-reset" type="button" title="Limpiar filtros">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M5 7l1 14h12l1-14M9 7V4h6v3"/></svg>
+                            <span>Limpiar</span>
+                        </button>
+                    </div>
+                    <p class="movement-history-message" id="movement-history-message" role="status" aria-live="polite">Abre esta pestaña para consultar los movimientos registrados.</p>
+                    <div class="movement-table-wrap" id="movement-table-wrap" hidden>
+                        <table class="movement-table" aria-label="Historial de movimientos de inventario">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Fecha</th>
+                                    <th scope="col">Empleado</th>
+                                    <th scope="col">Movimiento</th>
+                                    <th scope="col">Herramienta / artículo</th>
+                                    <th scope="col">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody id="movement-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
             {% endif %}
         </div>

@@ -5,7 +5,7 @@ from io import BytesIO
 import pytest
 
 from mi_app.extensions import db
-from mi_app.models import ArticuloInventario
+from mi_app.models import ArticuloInventario, MovimientoInventario
 
 
 @pytest.fixture()
@@ -90,6 +90,9 @@ def test_crear_articulo_admin(client, app, creador_usuarios, iniciar_sesion, ima
         guardado = db.session.get(ArticuloInventario, articulo["id"])
         assert guardado is not None
         assert guardado.stock == 5
+        movimiento = MovimientoInventario.query.filter_by(codigo_articulo=guardado.codigo).one()
+        assert movimiento.tipo == "Ingreso"
+        assert movimiento.cantidad == 5
 
 
 def test_crear_articulo_imagen_invalida_400(client, creador_usuarios, iniciar_sesion):
@@ -134,7 +137,7 @@ def test_crear_articulo_stock_invalido_400(client, creador_usuarios, iniciar_ses
     assert respuesta.status_code == 400
 
 
-def test_retirar_articulo(client, crear_articulo, creador_usuarios, iniciar_sesion):
+def test_retirar_articulo(client, app, crear_articulo, creador_usuarios, iniciar_sesion):
     id_articulo = crear_articulo(codigo="ART-1", stock=10)
     creador_usuarios("ana")
     iniciar_sesion("ana")
@@ -142,6 +145,51 @@ def test_retirar_articulo(client, crear_articulo, creador_usuarios, iniciar_sesi
     respuesta = client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 3})
     assert respuesta.status_code == 200
     assert respuesta.get_json()["articulo"]["stock"] == 7
+    movimiento = respuesta.get_json()["movimiento"]
+    assert movimiento["empleado"] == "ana"
+    assert movimiento["articulo"] == "Taladro"
+    assert movimiento["categoria"] == "General"
+    assert movimiento["cantidad"] == 3
+    assert movimiento["unidad"] == "unidades"
+    assert movimiento["tipo"] == "Retiro"
+
+    with app.app_context():
+        guardado = db.session.get(MovimientoInventario, movimiento["id"])
+        assert guardado is not None
+        assert guardado.usuario == "ana"
+
+
+def test_historial_movimientos_solo_admin(client, creador_usuarios, iniciar_sesion):
+    assert client.get("/api/inventario/movimientos").status_code == 401
+
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    respuesta = client.get("/api/inventario/movimientos")
+    assert respuesta.status_code == 403
+
+
+def test_admin_consulta_movimientos_de_retiro(client, crear_articulo, creador_usuarios, iniciar_sesion):
+    id_articulo = crear_articulo(codigo="ART-HIST", nombre="Llave inglesa", stock=8)
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    retiro = client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 2})
+    assert retiro.status_code == 200
+
+    client.post("/api/logout")
+    creador_usuarios("admin", es_admin=True)
+    iniciar_sesion("admin")
+    respuesta = client.get("/api/inventario/movimientos")
+
+    assert respuesta.status_code == 200
+    datos = respuesta.get_json()
+    assert datos["total"] == 1
+    movimiento = datos["movimientos"][0]
+    assert movimiento["empleado"] == "ana"
+    assert movimiento["articulo"] == "Llave inglesa"
+    assert movimiento["cantidad"] == 2
+    assert movimiento["categoria"] == "General"
+    assert movimiento["tipo"] == "Retiro"
+    assert datos["categorias"] == ["General"]
 
 
 def test_retirar_sin_sesion_401(client, crear_articulo):
@@ -259,4 +307,4 @@ def test_crear_categoria_nombre_invalido_400(client, creador_usuarios, iniciar_s
     # Nombre vacío
     assert client.post("/api/inventario/categorias", json={"nombre": "   "}).status_code == 400
     # Nombre demasiado largo
-    assert client.post("/api/inventario/categorias", json={"nombre": "A" * 61}).status_code == 400
+    assert client.post("/api/inventario/categorias", json={"nombre": "A" * 61}).status_code == 400

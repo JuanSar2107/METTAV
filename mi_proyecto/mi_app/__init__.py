@@ -121,6 +121,27 @@ def create_app(test_config: dict | None = None) -> Flask:
                         text(f"ALTER TABLE usuarios ADD COLUMN {column_name} {column_type}")
                     )
 
+        movement_columns = {
+            column["name"]
+            for column in inspect(db.engine).get_columns("movimientos_inventario")
+        }
+        if "categoria" not in movement_columns:
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE movimientos_inventario "
+                        "ADD COLUMN categoria VARCHAR(60) NOT NULL DEFAULT 'Sin categoría'"
+                    )
+                )
+        if "tipo" not in movement_columns:
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE movimientos_inventario "
+                        "ADD COLUMN tipo VARCHAR(16) NOT NULL DEFAULT 'Retiro'"
+                    )
+                )
+
         indexes = inspect(db.engine).get_indexes("usuarios")
         constraints = inspect(db.engine).get_unique_constraints("usuarios")
         unique_columns = {

@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from mi_app.extensions import db
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
-from mi_app.models import ArticuloInventario, Categoria, Usuario
+from mi_app.models import ArticuloInventario, Categoria, MovimientoInventario, Usuario
 
 inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
 
@@ -70,6 +70,18 @@ def crear_articulo():
         imagen_url=imagen_url,
     )
     db.session.add(articulo)
+    usuario = _usuario_actual()
+    if stock > 0 and usuario is not None:
+        db.session.add(MovimientoInventario(
+            empleado=usuario.nombre_completo or usuario.usuario,
+            usuario=usuario.usuario,
+            articulo=nombre,
+            codigo_articulo=articulo.codigo,
+            categoria=categoria,
+            tipo="Ingreso",
+            cantidad=stock,
+            unidad=unidad,
+        ))
     if not Categoria.query.filter(db.func.lower(Categoria.nombre) == categoria.lower()).first():
         db.session.add(Categoria(nombre=categoria))
     try:
@@ -145,15 +157,40 @@ def eliminar_articulo(id_articulo: int):
     return jsonify(mensaje="Artículo eliminado.")
 
 
+@inventario_bp.get("/movimientos")
+def listar_movimientos():
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.es_admin:
+        return jsonify(error="Solo un administrador puede ver el historial de movimientos."), 403
+
+    movimientos = (
+        MovimientoInventario.query
+        .order_by(MovimientoInventario.fecha_hora.desc(), MovimientoInventario.id.desc())
+        .all()
+    )
+    return jsonify(
+        total=len(movimientos),
+        categorias=sorted({movimiento.categoria for movimiento in movimientos if movimiento.categoria}),
+        movimientos=[movimiento.to_dict() for movimiento in movimientos],
+    )
+
+
 @inventario_bp.post("/<int:id_articulo>/retirar")
 def retirar_articulo(id_articulo: int):
-    if _usuario_actual() is None:
+    usuario = _usuario_actual()
+    if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
 
     datos = request.get_json(silent=True)
     cantidad = datos.get("cantidad") if isinstance(datos, dict) else None
     if isinstance(cantidad, bool) or not isinstance(cantidad, int) or cantidad < 1:
         return jsonify(error="Indica una cantidad entera mayor que cero."), 400
+
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    if articulo is None:
+        return jsonify(error="El artículo no existe."), 404
 
     resultado = db.session.execute(
         update(ArticuloInventario)
@@ -163,10 +200,22 @@ def retirar_articulo(id_articulo: int):
     if resultado.rowcount == 0:
         db.session.rollback()
         articulo = db.session.get(ArticuloInventario, id_articulo)
-        if articulo is None:
-            return jsonify(error="El artículo no existe."), 404
         return jsonify(error="No hay suficientes unidades en stock.", stock=articulo.stock), 409
 
+    movimiento = MovimientoInventario(
+        empleado=usuario.nombre_completo or usuario.usuario,
+        usuario=usuario.usuario,
+        articulo=articulo.nombre,
+        codigo_articulo=articulo.codigo,
+        categoria=articulo.categoria,
+        tipo="Retiro",
+        cantidad=cantidad,
+        unidad=articulo.unidad,
+    )
+    db.session.add(movimiento)
     db.session.commit()
     articulo = db.session.get(ArticuloInventario, id_articulo)
-    return jsonify(articulo={"id": articulo.id, "stock": articulo.stock, "unidad": articulo.unidad})
+    return jsonify(
+        articulo={"id": articulo.id, "stock": articulo.stock, "unidad": articulo.unidad},
+        movimiento=movimiento.to_dict(),
+    )

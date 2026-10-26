@@ -576,16 +576,179 @@
         });
     };
 
+    const movementHistory = document.querySelector("#movement-history");
+    const movementTableWrap = document.querySelector("#movement-table-wrap");
+    const movementTableBody = document.querySelector("#movement-table-body");
+    const movementHistoryMessage = document.querySelector("#movement-history-message");
+    const movementResultsCount = document.querySelector("#movement-results-count");
+    const movementFilters = document.querySelector("#movement-filters");
+    const movementSearchInput = document.querySelector("#movement-search");
+    const movementCategoryFilter = document.querySelector("#movement-category-filter");
+    const movementDateInput = document.querySelector("#movement-date");
+    const movementFilterReset = document.querySelector("#movement-filter-reset");
+    let movementRecords = [];
+
+    const normalizeMovementText = (value) =>
+        String(value || "").toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    const localDateKey = (value) => {
+        const date = new Date(value);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    const renderMovementHistory = () => {
+        if (!(movementTableBody instanceof HTMLTableSectionElement)) return;
+
+        const query = movementSearchInput instanceof HTMLInputElement
+            ? normalizeMovementText(movementSearchInput.value.trim())
+            : "";
+        const category = movementCategoryFilter instanceof HTMLSelectElement
+            ? movementCategoryFilter.value
+            : "";
+        const selectedDate = movementDateInput instanceof HTMLInputElement ? movementDateInput.value : "";
+
+        movementTableBody.replaceChildren();
+
+        const filteredMovements = movementRecords.filter((movimiento) => {
+            const searchableText = normalizeMovementText(
+                `${movimiento.tipo} ${movimiento.empleado} ${movimiento.usuario} ${movimiento.articulo} ${movimiento.codigo_articulo} ${movimiento.categoria}`,
+            );
+            const movementDate = localDateKey(movimiento.fecha_hora);
+            return (!query || searchableText.includes(query))
+                && (!category || movimiento.categoria === category)
+                && (!selectedDate || movementDate === selectedDate);
+        });
+
+        if (movementResultsCount) {
+            movementResultsCount.textContent = `Mostrando ${filteredMovements.length} de ${movementRecords.length} movimientos`;
+        }
+        if (filteredMovements.length === 0) {
+            movementHistoryMessage.textContent = movementRecords.length
+                ? "No hay movimientos que coincidan con los filtros."
+                : "Todavía no hay movimientos registrados.";
+            movementHistoryMessage.hidden = false;
+            movementTableWrap.hidden = true;
+            return;
+        }
+
+        const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+            dateStyle: "medium",
+            timeStyle: "short",
+        });
+        filteredMovements.forEach((movimiento) => {
+            const row = document.createElement("tr");
+            const dateCell = document.createElement("td");
+            const employeeCell = document.createElement("td");
+            const typeCell = document.createElement("td");
+            const articleCell = document.createElement("td");
+            const quantityCell = document.createElement("td");
+            const employeeName = document.createElement("span");
+            const username = document.createElement("small");
+            const movementType = document.createElement("span");
+            const articleName = document.createElement("span");
+            const articleCode = document.createElement("small");
+
+            dateCell.textContent = dateFormatter.format(new Date(movimiento.fecha_hora));
+            employeeName.textContent = movimiento.empleado;
+            username.textContent = `@${movimiento.usuario}`;
+            movementType.className = movimiento.tipo === "Ingreso"
+                ? "movement-type-badge movement-type-badge--entry"
+                : "movement-type-badge movement-type-badge--withdrawal";
+            movementType.textContent = movimiento.tipo;
+            articleName.textContent = movimiento.articulo;
+            articleCode.textContent = `${movimiento.codigo_articulo} · ${movimiento.categoria}`;
+            quantityCell.className = "movement-quantity";
+            quantityCell.textContent = `${movimiento.cantidad} ${movimiento.unidad}`;
+            employeeCell.append(employeeName, username);
+            articleCell.append(articleName, articleCode);
+            typeCell.append(movementType);
+            row.append(dateCell, employeeCell, typeCell, articleCell, quantityCell);
+            movementTableBody.append(row);
+        });
+
+        movementHistoryMessage.hidden = true;
+        movementTableWrap.hidden = false;
+    };
+
+    const loadMovementHistory = async () => {
+        if (
+            !(movementHistory instanceof HTMLDivElement) ||
+            !(movementTableWrap instanceof HTMLDivElement) ||
+            !(movementTableBody instanceof HTMLTableSectionElement) ||
+            !(movementHistoryMessage instanceof HTMLParagraphElement) ||
+            !(movementFilters instanceof HTMLDivElement)
+        ) {
+            return;
+        }
+
+        movementHistoryMessage.textContent = "Cargando movimientos...";
+        movementHistoryMessage.hidden = false;
+        movementTableWrap.hidden = true;
+        movementFilters.hidden = true;
+
+        try {
+            const response = await fetch(movementHistory.dataset.movementsUrl);
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "No se pudo cargar el historial.");
+            }
+
+            movementRecords = result.movimientos;
+            if (movementCategoryFilter instanceof HTMLSelectElement) {
+                movementCategoryFilter.replaceChildren(new Option("Todas las categorías", ""));
+                result.categorias.forEach((categoria) => {
+                    movementCategoryFilter.add(new Option(categoria, categoria));
+                });
+            }
+            movementFilters.hidden = false;
+            renderMovementHistory();
+        } catch (error) {
+            movementHistoryMessage.textContent = error.message || "No se pudo cargar el historial.";
+            if (movementResultsCount) movementResultsCount.textContent = "";
+        }
+    };
+
+    [movementSearchInput, movementCategoryFilter, movementDateInput].forEach((filter) => {
+        if (filter instanceof HTMLInputElement || filter instanceof HTMLSelectElement) {
+            const eventName = filter instanceof HTMLInputElement && filter.type === "search" ? "input" : "change";
+            filter.addEventListener(eventName, renderMovementHistory);
+        }
+    });
+
+    if (movementFilterReset instanceof HTMLButtonElement) {
+        movementFilterReset.addEventListener("click", () => {
+            if (movementSearchInput instanceof HTMLInputElement) movementSearchInput.value = "";
+            if (movementCategoryFilter instanceof HTMLSelectElement) movementCategoryFilter.value = "";
+            if (movementDateInput instanceof HTMLInputElement) movementDateInput.value = "";
+            renderMovementHistory();
+        });
+    }
+
     tabButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
             const targetId = btn.dataset.target;
             switchTab(targetId);
-            window.location.hash = targetId === "section-users" ? "#usuarios" : "#inventario";
+            const tabHashes = {
+                "section-users": "#usuarios",
+                "section-movements": "#movimientos",
+                "section-inventory": "#inventario",
+            };
+            window.location.hash = tabHashes[targetId] || "#inventario";
+            if (targetId === "section-movements") loadMovementHistory();
         });
     });
 
-    if (window.location.hash === "#usuarios") {
-        switchTab("section-users");
+    const initialTabs = {
+        "#usuarios": "section-users",
+        "#movimientos": "section-movements",
+    };
+    const initialTab = initialTabs[window.location.hash];
+    if (initialTab) {
+        switchTab(initialTab);
+        if (initialTab === "section-movements") loadMovementHistory();
     }
 
     // ==========================================

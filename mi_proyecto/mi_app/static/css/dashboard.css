@@ -1704,6 +1704,219 @@ body {
     display: none !important;
 }
 
+.section-heading-title {
+    margin: 0;
+    color: var(--blue-brand);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1.08;
+}
+
+.movement-history-heading {
+    align-items: flex-end;
+}
+
+.movement-filters {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) minmax(160px, 1fr) repeat(2, minmax(140px, 0.8fr)) auto;
+    align-items: end;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.movement-filters[hidden] {
+    display: none;
+}
+
+.movement-date-filter {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    color: #526b80;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.movement-date-filter input,
+.movement-date-filter select {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    padding: 0 10px;
+    border: 1px solid rgba(39, 71, 101, 0.22);
+    border-radius: 7px;
+    background: #fff;
+    color: #194065;
+    font: 500 13px 'Barlow', sans-serif;
+}
+
+.movement-date-filter input:focus-visible,
+.movement-date-filter select:focus-visible,
+.movement-filter-reset:focus-visible {
+    outline: 3px solid rgba(75, 155, 213, 0.4);
+    outline-offset: 1px;
+}
+
+.movement-filter-reset {
+    display: inline-flex;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 11px;
+    border: 1px solid rgba(39, 71, 101, 0.2);
+    border-radius: 7px;
+    background: #fff;
+    color: #526b80;
+    font: 600 12px 'Barlow', sans-serif;
+    cursor: pointer;
+}
+
+.movement-filter-reset:hover {
+    border-color: var(--blue);
+    color: var(--blue-dark);
+}
+
+.movement-filter-reset svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.movement-history-message {
+    margin: 0;
+    padding: 28px 18px;
+    border: 1px dashed rgba(39, 71, 101, 0.25);
+    border-radius: 8px;
+    color: #526b80;
+    text-align: center;
+}
+
+.movement-table-wrap {
+    overflow-x: auto;
+    border: 1px solid rgba(39, 71, 101, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+}
+
+.movement-table-wrap[hidden] {
+    display: none;
+}
+
+.movement-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.movement-table th,
+.movement-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(39, 71, 101, 0.1);
+    vertical-align: middle;
+}
+
+.movement-table th {
+    background: #edf4f8;
+    color: #526b80;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.movement-table td {
+    color: #274765;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.movement-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.movement-table td small {
+    display: block;
+    margin-top: 3px;
+    color: #6a8092;
+    font-size: 11px;
+}
+
+.movement-type-badge {
+    display: inline-flex;
+    min-height: 24px;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.movement-type-badge--entry {
+    background: #e7f4eb;
+    color: #39704c;
+}
+
+.movement-type-badge--withdrawal {
+    background: #fff0e5;
+    color: #a85f2b;
+}
+
+.movement-quantity {
+    color: var(--blue-brand) !important;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .movement-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .movement-filters > .search-field {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .movement-filter-reset {
+        justify-self: end;
+    }
+}
+
+@media (max-width: 640px) {
+    .movement-history-heading {
+        align-items: flex-start;
+    }
+
+    .movement-history-heading .results-count {
+        text-align: left;
+    }
+
+    .movement-filters {
+        grid-template-columns: 1fr;
+        gap: 9px;
+    }
+
+    .movement-filters > .search-field {
+        grid-column: auto;
+    }
+
+    .movement-filter-reset {
+        width: 100%;
+    }
+
+    .movement-table th,
+    .movement-table td {
+        padding: 11px 12px;
+    }
+}
+
 /* ==========================================================================
    Listado de Usuarios y Empleados
    ========================================================================== */

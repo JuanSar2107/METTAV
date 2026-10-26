@@ -20,6 +20,7 @@ _DESCRIPCIONES_RUTAS = {
     "inventario.crear_articulo": "Crea un artículo del inventario; requiere sesión de administrador.",
     "inventario.eliminar_articulo": "Elimina un artículo; requiere sesión de administrador.",
     "inventario.retirar_articulo": "Retira unidades del stock de un artículo autenticado.",
+    "inventario.listar_movimientos": "Lista los retiros de inventario; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
     "inventario.crear_categoria": "Crea una nueva categoría; requiere sesión de administrador.",
     "static": "Entrega archivos estáticos de la aplicación.",
