@@ -70,6 +70,18 @@ def registrar_usuario():
     return jsonify(usuario=_respuesta_usuario(usuario)), 201
 
 
+@usuarios_bp.get("/usuarios")
+def listar_usuarios():
+    usuario_actual = _usuario_actual()
+    if usuario_actual is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario_actual.es_admin:
+        return jsonify(error="Solo un administrador puede ver la lista de usuarios."), 403
+
+    usuarios = Usuario.query.order_by(Usuario.es_admin.desc(), Usuario.usuario.asc()).all()
+    return jsonify(usuarios=[_respuesta_usuario(u) for u in usuarios])
+
+
 @usuarios_bp.post("/login")
 def iniciar_sesion():
     datos = _leer_datos_json()

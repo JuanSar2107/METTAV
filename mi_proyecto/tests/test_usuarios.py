@@ -171,3 +171,29 @@ def test_eliminar_cuenta(client, creador_usuarios, iniciar_sesion):
     respuesta = client.delete("/api/usuarios/me")
     assert respuesta.status_code == 200
     assert client.get("/api/usuarios/me").status_code == 401
+
+
+def test_listar_usuarios_sin_sesion_401(client):
+    respuesta = client.get("/api/usuarios")
+    assert respuesta.status_code == 401
+
+
+def test_listar_usuarios_usuario_normal_403(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("normal", es_admin=False)
+    iniciar_sesion("normal")
+    respuesta = client.get("/api/usuarios")
+    assert respuesta.status_code == 403
+
+
+def test_listar_usuarios_admin_200(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("admin", es_admin=True)
+    creador_usuarios("empleado1", es_admin=False)
+    iniciar_sesion("admin")
+
+    respuesta = client.get("/api/usuarios")
+    assert respuesta.status_code == 200
+    lista = respuesta.get_json()["usuarios"]
+    assert isinstance(lista, list)
+    nombres = [u["usuario"] for u in lista]
+    assert "admin" in nombres
+    assert "empleado1" in nombres

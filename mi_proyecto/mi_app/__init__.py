@@ -37,7 +37,45 @@ def _sembrar_admin(app: Flask) -> None:
     app.logger.info("Administrador inicial '%s' creado.", nombre)
 
 
+def _sembrar_categorias(app: Flask) -> None:
+    """Siembra las categorías por defecto y las que ya existan en los artículos."""
+    from .models import ArticuloInventario, Categoria
+
+    categorias_base = [
+        "General",
+        "Herramientas eléctricas",
+        "Herramientas manuales",
+        "Protección personal",
+        "Consumibles",
+    ]
+    try:
+        articulos_existentes = (
+            db.session.query(ArticuloInventario.categoria)
+            .distinct()
+            .all()
+        )
+        articulos_cats = [c[0] for c in articulos_existentes if c[0]]
+    except Exception:
+        articulos_cats = []
+
+    todas = []
+    for cat in categorias_base + articulos_cats:
+        c_clean = cat.strip()
+        if c_clean and c_clean not in todas:
+            todas.append(c_clean)
+
+    for cat_nombre in todas:
+        if not Categoria.query.filter_by(nombre=cat_nombre).first():
+            db.session.add(Categoria(nombre=cat_nombre))
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def create_app(test_config: dict | None = None) -> Flask:
+
     app = Flask(__name__)
     database_path = Path(app.root_path).parent / "instance" / "mi_proyecto.sqlite3"
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -101,6 +139,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                     )
 
         _sembrar_admin(app)
+        _sembrar_categorias(app)
 
     @app.errorhandler(413)
     def archivo_supera_limite(_error):

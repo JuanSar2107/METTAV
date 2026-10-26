@@ -186,6 +186,43 @@ html, body {
     letter-spacing: 0.08em;
 }
 
+.btn-toggle-password {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 100%;
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: #4b6a8a;
+    cursor: pointer;
+    padding: 0;
+    margin-right: 4px;
+    border-radius: 6px;
+    transition: color 0.18s, background 0.18s;
+}
+
+.btn-toggle-password:hover {
+    color: var(--blue-brand);
+    background: rgba(75, 155, 213, 0.14);
+}
+
+.btn-toggle-password:focus-visible {
+    outline: 2px solid var(--input-focus);
+    outline-offset: -2px;
+}
+
+.btn-toggle-password svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 /* ── Opciones ────────────────────────────────────────── */
 .form-options {
     display: flex;

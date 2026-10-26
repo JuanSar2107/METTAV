@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify, redirect, render_template, session, url_for
 
 from mi_app.extensions import db
-from mi_app.models import ArticuloInventario, ConfiguracionSistema, Usuario
+from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
 
 main_bp = Blueprint('main', __name__)
 
@@ -10,6 +10,7 @@ _DESCRIPCIONES_RUTAS = {
     "main.dashboard": "Muestra el inventario del usuario autenticado.",
     "main.docs": "Devuelve la documentación JSON de todas las rutas registradas.",
     "usuarios.registrar_usuario": "Crea una cuenta de usuario normal; requiere sesión de administrador.",
+    "usuarios.listar_usuarios": "Devuelve la lista de usuarios y empleados registrados; requiere sesión de administrador.",
     "usuarios.iniciar_sesion": "Valida las credenciales y crea la sesión del usuario.",
     "usuarios.cerrar_sesion": "Cierra la sesión actual.",
     "usuarios.obtener_usuario_actual": "Devuelve los datos del usuario autenticado.",
@@ -19,6 +20,8 @@ _DESCRIPCIONES_RUTAS = {
     "inventario.crear_articulo": "Crea un artículo del inventario; requiere sesión de administrador.",
     "inventario.eliminar_articulo": "Elimina un artículo; requiere sesión de administrador.",
     "inventario.retirar_articulo": "Retira unidades del stock de un artículo autenticado.",
+    "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
+    "inventario.crear_categoria": "Crea una nueva categoría; requiere sesión de administrador.",
     "static": "Entrega archivos estáticos de la aplicación.",
 }
 
@@ -111,10 +114,18 @@ def dashboard():
         session.clear()
         return redirect(url_for('main.login'))
     articulos = _inventario_inicial()
+    categorias = Categoria.query.order_by(Categoria.nombre.asc()).all()
+    usuarios_registrados = (
+        Usuario.query.order_by(Usuario.es_admin.desc(), Usuario.usuario.asc()).all()
+        if usuario.es_admin
+        else []
+    )
     return render_template(
         'dashboard.html',
         usuario=usuario,
         articulos=articulos,
+        categorias=categorias,
+        usuarios_registrados=usuarios_registrados,
         es_admin=usuario.es_admin,
     )
 

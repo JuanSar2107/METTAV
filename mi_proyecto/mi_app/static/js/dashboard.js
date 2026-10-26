@@ -1,6 +1,7 @@
 (() => {
     const logoutButton = document.querySelector("#logout-button");
     const searchInput = document.querySelector("#inventory-search");
+    const categoryFilter = document.querySelector("#category-filter");
     let cards = [...document.querySelectorAll(".inventory-card")];
     const resultsCount = document.querySelector("#results-count");
     const emptySearch = document.querySelector("#empty-search");
@@ -140,15 +141,28 @@
         emptySearch.hidden = visibleCount > 0;
     };
 
-    if (searchInput instanceof HTMLInputElement) {
-        searchInput.addEventListener("input", () => {
-            const query = searchInput.value.trim().toLocaleLowerCase("es");
-            cards.forEach((card) => {
-                const content = `${card.dataset.name} ${card.dataset.code} ${card.dataset.category}`.toLocaleLowerCase("es");
-                card.hidden = !content.includes(query);
-            });
-            updateResultsCount();
+    const applyFilters = () => {
+        const query = searchInput instanceof HTMLInputElement ? searchInput.value.trim().toLocaleLowerCase("es") : "";
+        const selectedCategory = categoryFilter instanceof HTMLSelectElement ? categoryFilter.value.trim().toLocaleLowerCase("es") : "";
+
+        cards.forEach((card) => {
+            const content = `${card.dataset.name} ${card.dataset.code} ${card.dataset.category}`.toLocaleLowerCase("es");
+            const cardCategory = (card.dataset.category || "").trim().toLocaleLowerCase("es");
+
+            const matchesQuery = !query || content.includes(query);
+            const matchesCategory = !selectedCategory || cardCategory === selectedCategory;
+
+            card.hidden = !(matchesQuery && matchesCategory);
         });
+        updateResultsCount();
+    };
+
+    if (searchInput instanceof HTMLInputElement) {
+        searchInput.addEventListener("input", applyFilters);
+    }
+
+    if (categoryFilter instanceof HTMLSelectElement) {
+        categoryFilter.addEventListener("change", applyFilters);
     }
 
     document.querySelectorAll(".delete-item").forEach((button) => {
@@ -285,7 +299,8 @@
                 const createdUsername = result.usuario.usuario;
                 createUserForm.reset();
                 addUserDialog.close();
-                showToast(`Usuario ${createdUsername} creado con rol normal.`);
+                window.location.hash = "#usuarios";
+                window.location.reload();
             } catch (error) {
                 createUserMessage.textContent = error.message || "No se pudo conectar con el servidor.";
                 createUserMessage.dataset.state = "error";
@@ -294,6 +309,145 @@
                 createUserButton.disabled = false;
             }
         });
+    }
+
+    const addCategoryDialog = document.querySelector("#add-category-dialog");
+    const createCategoryForm = document.querySelector("#create-category-form");
+    const newCategoryNameInput = document.querySelector("#new-category-name");
+    const createCategoryButton = document.querySelector("#create-category-button");
+    const createCategoryMessage = document.querySelector("#create-category-message");
+    const closeAddCategory = document.querySelector("#close-add-category");
+    const cancelAddCategory = document.querySelector("#cancel-add-category");
+    const btnQuickAddCategory = document.querySelector("#btn-quick-add-category");
+    const itemCategorySelect = document.querySelector("#new-item-category");
+
+    const addCategoryToSelects = (catName, selectInItemForm = false) => {
+        if (itemCategorySelect instanceof HTMLSelectElement) {
+            let option = [...itemCategorySelect.options].find(
+                (opt) => opt.value.toLowerCase() === catName.toLowerCase()
+            );
+            if (!option) {
+                option = document.createElement("option");
+                option.value = catName;
+                option.textContent = catName;
+                const newOptionMarker = itemCategorySelect.querySelector('option[value="__NEW_CATEGORY__"]');
+                if (newOptionMarker) {
+                    itemCategorySelect.insertBefore(option, newOptionMarker);
+                } else {
+                    itemCategorySelect.appendChild(option);
+                }
+            }
+            if (selectInItemForm) {
+                itemCategorySelect.value = option.value;
+            }
+        }
+
+        if (categoryFilter instanceof HTMLSelectElement) {
+            let option = [...categoryFilter.options].find(
+                (opt) => opt.value.toLowerCase() === catName.toLowerCase()
+            );
+            if (!option) {
+                option = document.createElement("option");
+                option.value = catName;
+                option.textContent = catName;
+                categoryFilter.appendChild(option);
+            }
+        }
+    };
+
+    const openAddCategoryModal = () => {
+        if (!(addCategoryDialog instanceof HTMLDialogElement)) return;
+        if (createCategoryForm instanceof HTMLFormElement) {
+            createCategoryForm.reset();
+        }
+        if (createCategoryMessage) {
+            createCategoryMessage.hidden = true;
+        }
+        addCategoryDialog.showModal();
+        if (newCategoryNameInput instanceof HTMLInputElement) {
+            newCategoryNameInput.focus();
+        }
+    };
+
+    if (itemCategorySelect instanceof HTMLSelectElement) {
+        let lastSelectedCategory = itemCategorySelect.value !== "__NEW_CATEGORY__" ? itemCategorySelect.value : "General";
+
+        itemCategorySelect.addEventListener("focus", () => {
+            if (itemCategorySelect.value !== "__NEW_CATEGORY__") {
+                lastSelectedCategory = itemCategorySelect.value;
+            }
+        });
+
+        itemCategorySelect.addEventListener("change", () => {
+            if (itemCategorySelect.value === "__NEW_CATEGORY__") {
+                itemCategorySelect.value = lastSelectedCategory;
+                openAddCategoryModal();
+            } else {
+                lastSelectedCategory = itemCategorySelect.value;
+            }
+        });
+    }
+
+    if (btnQuickAddCategory instanceof HTMLButtonElement) {
+        btnQuickAddCategory.addEventListener("click", () => {
+            openAddCategoryModal();
+        });
+    }
+
+    if (addCategoryDialog instanceof HTMLDialogElement) {
+        if (closeAddCategory instanceof HTMLButtonElement) {
+            closeAddCategory.addEventListener("click", () => addCategoryDialog.close());
+        }
+        if (cancelAddCategory instanceof HTMLButtonElement) {
+            cancelAddCategory.addEventListener("click", () => addCategoryDialog.close());
+        }
+        addCategoryDialog.addEventListener("click", (event) => {
+            if (event.target === addCategoryDialog) {
+                addCategoryDialog.close();
+            }
+        });
+
+        if (createCategoryForm instanceof HTMLFormElement) {
+            createCategoryForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const nombre = newCategoryNameInput ? newCategoryNameInput.value.trim() : "";
+                if (!nombre) return;
+
+                if (createCategoryButton instanceof HTMLButtonElement) {
+                    createCategoryButton.disabled = true;
+                }
+                if (createCategoryMessage) {
+                    createCategoryMessage.hidden = true;
+                }
+
+                try {
+                    const response = await fetch(createCategoryForm.dataset.createUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ nombre }),
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.error || "No se pudo crear la categoría.");
+                    }
+                    const categoryName = result.categoria.nombre;
+                    addCategoryToSelects(categoryName, true);
+                    addCategoryDialog.close();
+                    createCategoryForm.reset();
+                    showToast(`Categoría "${categoryName}" guardada correctamente.`);
+                } catch (error) {
+                    if (createCategoryMessage) {
+                        createCategoryMessage.textContent = error.message || "Error al conectar con el servidor.";
+                        createCategoryMessage.dataset.state = "error";
+                        createCategoryMessage.hidden = false;
+                    }
+                } finally {
+                    if (createCategoryButton instanceof HTMLButtonElement) {
+                        createCategoryButton.disabled = false;
+                    }
+                }
+            });
+        }
     }
 
     if (!(dialog instanceof HTMLDialogElement)) {
@@ -387,6 +541,170 @@
                 showMessage(error.message || "No se pudo conectar con el servidor.", "error");
             } finally {
                 withdrawButton.disabled = Number(selectedCard.dataset.stock) === 0;
+            }
+        });
+    }
+
+    // ==========================================
+    // Navegación por pestañas (Inventario / Usuarios)
+    // ==========================================
+    const tabButtons = document.querySelectorAll(".tab-button");
+    const tabPanels = document.querySelectorAll(".dashboard-tab-panel");
+    const openAddUserPanelBtn = document.querySelector("#open-add-user-from-panel");
+
+    if (openAddUserPanelBtn instanceof HTMLButtonElement && addUserDialog instanceof HTMLDialogElement) {
+        openAddUserPanelBtn.addEventListener("click", () => addUserDialog.showModal());
+    }
+
+    const switchTab = (targetId) => {
+        tabButtons.forEach((btn) => {
+            const isActive = btn.dataset.target === targetId;
+            btn.classList.toggle("is-active", isActive);
+            btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+        tabPanels.forEach((panel) => {
+            panel.classList.toggle("is-hidden", panel.id !== targetId);
+        });
+    };
+
+    tabButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const targetId = btn.dataset.target;
+            switchTab(targetId);
+            window.location.hash = targetId === "section-users" ? "#usuarios" : "#inventario";
+        });
+    });
+
+    if (window.location.hash === "#usuarios") {
+        switchTab("section-users");
+    }
+
+    // ==========================================
+    // Filtro y búsqueda de Usuarios y Empleados
+    // ==========================================
+    const usersSearchInput = document.querySelector("#users-search");
+    const usersRoleFilter = document.querySelector("#users-role-filter");
+    const userCards = [...document.querySelectorAll(".user-card")];
+    const usersResultsCount = document.querySelector("#users-results-count");
+    const emptyUsersSearch = document.querySelector("#empty-users-search");
+
+    const applyUsersFilter = () => {
+        const query = usersSearchInput instanceof HTMLInputElement ? usersSearchInput.value.trim().toLocaleLowerCase("es") : "";
+        const role = usersRoleFilter instanceof HTMLSelectElement ? usersRoleFilter.value.trim().toLocaleLowerCase("es") : "";
+
+        let visibleCount = 0;
+        userCards.forEach((card) => {
+            const username = (card.dataset.username || "").toLocaleLowerCase("es");
+            const fullname = (card.dataset.fullname || "").toLocaleLowerCase("es");
+            const email = (card.dataset.email || "").toLocaleLowerCase("es");
+            const identity = (card.dataset.identity || "").toLocaleLowerCase("es");
+            const phone = (card.dataset.phone || "").toLocaleLowerCase("es");
+            const userRole = (card.dataset.role || "").toLocaleLowerCase("es");
+
+            const content = `${username} ${fullname} ${email} ${identity} ${phone}`;
+            const matchesQuery = !query || content.includes(query);
+            const matchesRole = !role || userRole === role;
+
+            const isVisible = matchesQuery && matchesRole;
+            card.hidden = !isVisible;
+            if (isVisible) visibleCount++;
+        });
+
+        if (usersResultsCount) {
+            usersResultsCount.textContent = `${visibleCount} ${visibleCount === 1 ? "usuario" : "usuarios"}`;
+        }
+        if (emptyUsersSearch) {
+            emptyUsersSearch.hidden = visibleCount > 0;
+        }
+    };
+
+    if (usersSearchInput instanceof HTMLInputElement) {
+        usersSearchInput.addEventListener("input", applyUsersFilter);
+    }
+    if (usersRoleFilter instanceof HTMLSelectElement) {
+        usersRoleFilter.addEventListener("change", applyUsersFilter);
+    }
+
+    // ==========================================
+    // Modal de Detalle de Usuario ("Ver más")
+    // ==========================================
+    const userDetailDialog = document.querySelector("#user-detail-dialog");
+    const closeUserDetail = document.querySelector("#close-user-detail");
+    const userDetailPhoto = document.querySelector("#user-detail-photo");
+    const userDetailFallback = document.querySelector("#user-detail-fallback");
+    const userDetailName = document.querySelector("#user-detail-name");
+    const userDetailHandle = document.querySelector("#user-detail-handle");
+    const userDetailBadge = document.querySelector("#user-detail-badge");
+    const userDetailUsername = document.querySelector("#user-detail-username");
+    const userDetailRoleDesc = document.querySelector("#user-detail-role-desc");
+    const userDetailIdentity = document.querySelector("#user-detail-identity");
+    const userDetailEmail = document.querySelector("#user-detail-email");
+    const userDetailPhone = document.querySelector("#user-detail-phone");
+    const userDetailAddress = document.querySelector("#user-detail-address");
+
+    const openUserDetails = (card) => {
+        if (!(userDetailDialog instanceof HTMLDialogElement) || !card) return;
+
+        const {
+            username,
+            fullname,
+            role,
+            roleLabel,
+            email,
+            identity,
+            phone,
+            address,
+            image,
+        } = card.dataset;
+
+        const displayName = fullname || username;
+        if (userDetailName) userDetailName.textContent = displayName;
+        if (userDetailHandle) userDetailHandle.textContent = `@${username}`;
+
+        if (userDetailBadge) {
+            userDetailBadge.textContent = roleLabel || (role === "admin" ? "Administrador" : "Empleado");
+            userDetailBadge.className = `user-role-badge ${role === "admin" ? "user-role-badge--admin" : "user-role-badge--employee"}`;
+        }
+
+        if (userDetailUsername) userDetailUsername.textContent = username;
+        if (userDetailRoleDesc) {
+            userDetailRoleDesc.textContent = role === "admin" ? "Administrador general del sistema" : "Empleado / Personal operativo";
+        }
+        if (userDetailIdentity) userDetailIdentity.textContent = identity || "No especificado";
+        if (userDetailEmail) userDetailEmail.textContent = email || "No especificado";
+        if (userDetailPhone) userDetailPhone.textContent = phone || "No especificado";
+        if (userDetailAddress) userDetailAddress.textContent = address || "No especificada";
+
+        if (image) {
+            if (userDetailPhoto) {
+                userDetailPhoto.src = image;
+                userDetailPhoto.alt = displayName;
+                userDetailPhoto.hidden = false;
+            }
+            if (userDetailFallback) userDetailFallback.hidden = true;
+        } else {
+            if (userDetailPhoto) userDetailPhoto.hidden = true;
+            if (userDetailFallback) {
+                userDetailFallback.textContent = (displayName.charAt(0) || "U").toUpperCase();
+                userDetailFallback.hidden = false;
+            }
+        }
+
+        userDetailDialog.showModal();
+    };
+
+    document.querySelectorAll(".user-more-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+            const card = button.closest(".user-card");
+            if (card) openUserDetails(card);
+        });
+    });
+
+    if (closeUserDetail instanceof HTMLButtonElement && userDetailDialog instanceof HTMLDialogElement) {
+        closeUserDetail.addEventListener("click", () => userDetailDialog.close());
+        userDetailDialog.addEventListener("click", (event) => {
+            if (event.target === userDetailDialog) {
+                userDetailDialog.close();
             }
         });
     }

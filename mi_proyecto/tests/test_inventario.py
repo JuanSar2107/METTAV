@@ -196,3 +196,67 @@ def test_eliminar_articulo_solo_admin(client, crear_articulo, creador_usuarios, 
 
     respuesta = client.delete(f"/api/inventario/{id_articulo}")
     assert respuesta.status_code == 403
+
+
+def test_listar_categorias_sin_sesion_401(client):
+    respuesta = client.get("/api/inventario/categorias")
+    assert respuesta.status_code == 401
+
+
+def test_listar_categorias_autenticado_200(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("pepe")
+    iniciar_sesion("pepe")
+
+    respuesta = client.get("/api/inventario/categorias")
+    assert respuesta.status_code == 200
+    categorias = respuesta.get_json()["categorias"]
+    assert isinstance(categorias, list)
+    nombres = [c["nombre"] for c in categorias]
+    assert "General" in nombres
+
+
+def test_crear_categoria_sin_sesion_401(client):
+    respuesta = client.post("/api/inventario/categorias", json={"nombre": "Herramientas neumáticas"})
+    assert respuesta.status_code == 401
+
+
+def test_crear_categoria_usuario_normal_403(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("normal")
+    iniciar_sesion("normal")
+
+    respuesta = client.post("/api/inventario/categorias", json={"nombre": "Herramientas neumáticas"})
+    assert respuesta.status_code == 403
+
+
+def test_crear_categoria_admin_exito(client, app, creador_usuarios, iniciar_sesion):
+    creador_usuarios("admin", es_admin=True)
+    iniciar_sesion("admin")
+
+    respuesta = client.post("/api/inventario/categorias", json={"nombre": "Herramientas neumáticas"})
+    assert respuesta.status_code == 201
+    datos = respuesta.get_json()
+    assert datos["categoria"]["nombre"] == "Herramientas neumáticas"
+
+    # Verificar que aparece en el listado
+    listado = client.get("/api/inventario/categorias").get_json()["categorias"]
+    assert any(c["nombre"] == "Herramientas neumáticas" for c in listado)
+
+
+def test_crear_categoria_duplicada_409(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("admin", es_admin=True)
+    iniciar_sesion("admin")
+
+    # Intentar crear una que ya existe por siembra base ("General")
+    respuesta = client.post("/api/inventario/categorias", json={"nombre": "general"})
+    assert respuesta.status_code == 409
+    assert "ya existe" in respuesta.get_json()["error"]
+
+
+def test_crear_categoria_nombre_invalido_400(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("admin", es_admin=True)
+    iniciar_sesion("admin")
+
+    # Nombre vacío
+    assert client.post("/api/inventario/categorias", json={"nombre": "   "}).status_code == 400
+    # Nombre demasiado largo
+    assert client.post("/api/inventario/categorias", json={"nombre": "A" * 61}).status_code == 400

@@ -20,3 +20,13 @@ class ConfiguracionSistema(db.Model):
 
     clave = db.Column(db.String(80), primary_key=True)
     valor = db.Column(db.String(255), nullable=False)
+
+
+class Categoria(db.Model):
+    __tablename__ = "categorias"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(60), unique=True, nullable=False)
+
+    def to_dict(self):
+        return {"id": self.id, "nombre": self.nombre}

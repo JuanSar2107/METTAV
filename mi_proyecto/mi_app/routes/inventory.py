@@ -6,9 +6,10 @@ from sqlalchemy.exc import IntegrityError
 
 from mi_app.extensions import db
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
-from mi_app.models import ArticuloInventario, Usuario
+from mi_app.models import ArticuloInventario, Categoria, Usuario
 
 inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
+
 
 
 def _usuario_actual() -> Usuario | None:
@@ -69,6 +70,8 @@ def crear_articulo():
         imagen_url=imagen_url,
     )
     db.session.add(articulo)
+    if not Categoria.query.filter(db.func.lower(Categoria.nombre) == categoria.lower()).first():
+        db.session.add(Categoria(nombre=categoria))
     try:
         db.session.commit()
     except IntegrityError:
@@ -77,6 +80,52 @@ def crear_articulo():
         return jsonify(error="No se pudo guardar el artículo. Inténtalo de nuevo."), 409
 
     return jsonify(articulo={"id": articulo.id, "nombre": articulo.nombre}), 201
+
+
+@inventario_bp.get("/categorias")
+def listar_categorias():
+    if _usuario_actual() is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    categorias = Categoria.query.order_by(Categoria.nombre.asc()).all()
+    return jsonify(categorias=[c.to_dict() for c in categorias])
+
+
+@inventario_bp.post("/categorias")
+def crear_categoria():
+    error = _error_admin()
+    if error is not None:
+        return error
+
+    datos = request.get_json(silent=True)
+    if not isinstance(datos, dict):
+        datos = request.form
+
+    nombre = (datos.get("nombre") or "").strip()
+    if not nombre:
+        return jsonify(error="El nombre de la categoría es obligatorio."), 400
+    if len(nombre) > 60:
+        return jsonify(error="El nombre de la categoría no puede superar los 60 caracteres."), 400
+
+    existente = Categoria.query.filter(db.func.lower(Categoria.nombre) == nombre.lower()).first()
+    if existente is not None:
+        return jsonify(
+            error=f"La categoría '{existente.nombre}' ya existe.",
+            categoria=existente.to_dict(),
+        ), 409
+
+    categoria = Categoria(nombre=nombre)
+    db.session.add(categoria)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(error="No se pudo guardar la categoría."), 409
+
+    return jsonify(
+        mensaje="Categoría creada con éxito.",
+        categoria=categoria.to_dict(),
+    ), 201
+
 
 
 @inventario_bp.delete("/<int:id_articulo>")

@@ -56,7 +56,28 @@
         </header>
 
         <div class="dashboard-content">
-            <div class="inventory-heading">
+            {% if es_admin %}
+            <nav class="dashboard-tabs" aria-label="Secciones del panel">
+                <button type="button" class="tab-button is-active" id="tab-btn-inventory" data-target="section-inventory">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                        <path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>
+                    </svg>
+                    <span>Inventario</span>
+                    <span class="tab-badge" id="badge-inventory-count">{{ articulos|length }}</span>
+                </button>
+                <button type="button" class="tab-button" id="tab-btn-users" data-target="section-users">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-2v6m-3-3h6" />
+                    </svg>
+                    <span>Usuarios y Empleados</span>
+                    <span class="tab-badge" id="badge-users-count">{{ usuarios_registrados|length }}</span>
+                </button>
+            </nav>
+            {% endif %}
+
+            <div id="section-inventory" class="dashboard-tab-panel">
+                <div class="inventory-heading">
                 <div>
                     <p class="eyebrow">GESTIÓN DE BODEGA</p>
                     <h1 id="dashboard-title">Inventario</h1>
@@ -105,6 +126,14 @@
                     </svg>
                     <input id="inventory-search" type="search" placeholder="Buscar artículo o categoría" autocomplete="off">
                 </label>
+                <div class="toolbar-category-filter">
+                    <select id="category-filter" class="category-filter-select" aria-label="Filtrar por categoría">
+                        <option value="">Todas las categorías</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat.nombre }}">{{ cat.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <span class="results-count" id="results-count" aria-live="polite">{{ articulos|length }} artículos</span>
             </div>
 
@@ -162,7 +191,129 @@
                 </article>
                 {% endfor %}
             </section>
-            <p class="empty-search" id="empty-search" hidden>No hay artículos que coincidan con la búsqueda.</p>
+                <p class="empty-search" id="empty-search" hidden>No hay artículos que coincidan con la búsqueda.</p>
+            </div>
+
+            {% if es_admin %}
+            <div id="section-users" class="dashboard-tab-panel is-hidden">
+                <div class="inventory-heading">
+                    <div>
+                        <p class="eyebrow">ADMINISTRACIÓN DE PERSONAL</p>
+                        <h2 class="section-heading-title">Usuarios y Empleados</h2>
+                        <p class="welcome-message">Directorio de usuarios registrados y colaboradores del sistema METTAV.</p>
+                    </div>
+                    <div class="inventory-heading-actions">
+                        <button class="btn-add-user" id="open-add-user-from-panel" type="button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-2v6m-3-3h6" />
+                            </svg>
+                            <span>Agregar usuario nuevo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <section class="inventory-summary" aria-label="Resumen de usuarios">
+                    <div class="summary-item">
+                        <span>Total registrados</span>
+                        <strong id="users-summary-total">{{ usuarios_registrados|length }}</strong>
+                    </div>
+                    <div class="summary-item">
+                        <span>Administradores</span>
+                        <strong id="users-summary-admins">{{ usuarios_registrados|selectattr('es_admin')|list|length }}</strong>
+                    </div>
+                    <div class="summary-item">
+                        <span>Empleados / Usuarios</span>
+                        <strong id="users-summary-employees">{{ usuarios_registrados|rejectattr('es_admin')|list|length }}</strong>
+                    </div>
+                </section>
+
+                <div class="inventory-toolbar">
+                    <label class="search-field" for="users-search">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-4-4" />
+                        </svg>
+                        <input id="users-search" type="search" placeholder="Buscar por nombre, usuario, correo, cédula o teléfono" autocomplete="off">
+                    </label>
+                    <div class="toolbar-category-filter">
+                        <select id="users-role-filter" class="category-filter-select" aria-label="Filtrar por rol">
+                            <option value="">Todos los roles</option>
+                            <option value="admin">Administradores</option>
+                            <option value="empleado">Empleados / Usuarios</option>
+                        </select>
+                    </div>
+                    <span class="results-count" id="users-results-count" aria-live="polite">{{ usuarios_registrados|length }} usuarios</span>
+                </div>
+
+                <div class="users-list" id="users-list" role="list">
+                    {% for u in usuarios_registrados %}
+                    <article
+                        class="user-card"
+                        data-id="{{ u.id_usuario }}"
+                        data-username="{{ u.usuario }}"
+                        data-fullname="{{ u.nombre_completo or '' }}"
+                        data-role="{{ 'admin' if u.es_admin else 'empleado' }}"
+                        data-role-label="{{ 'Administrador' if u.es_admin else 'Empleado' }}"
+                        data-email="{{ u.correo or '' }}"
+                        data-identity="{{ u.numero_identidad or '' }}"
+                        data-phone="{{ u.telefono or '' }}"
+                        data-address="{{ u.direccion or '' }}"
+                        data-image="{{ u.imagen_perfil or '' }}"
+                    >
+                        <div class="user-card-main">
+                            <div class="user-card-avatar-wrap">
+                                {% if u.imagen_perfil %}
+                                <img class="user-card-avatar" src="{{ u.imagen_perfil }}" alt="" loading="lazy">
+                                {% else %}
+                                <div class="user-card-avatar-initials" aria-hidden="true">
+                                    {{ (u.nombre_completo or u.usuario)[:1]|upper }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="user-card-info">
+                                <div class="user-card-title-row">
+                                    <h3 class="user-card-name">{{ u.nombre_completo or u.usuario }}</h3>
+                                    <span class="user-role-badge {% if u.es_admin %}user-role-badge--admin{% else %}user-role-badge--employee{% endif %}">
+                                        {{ 'Administrador' if u.es_admin else 'Empleado' }}
+                                    </span>
+                                </div>
+                                <p class="user-card-username">@{{ u.usuario }}</p>
+                                <div class="user-card-contacts">
+                                    {% if u.correo %}
+                                    <span class="user-contact-tag">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                        {{ u.correo }}
+                                    </span>
+                                    {% endif %}
+                                    {% if u.telefono %}
+                                    <span class="user-contact-tag">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                        {{ u.telefono }}
+                                    </span>
+                                    {% endif %}
+                                    {% if u.numero_identidad %}
+                                    <span class="user-contact-tag">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><line x1="15" y1="8" x2="17" y2="8"/><line x1="15" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+                                        CC/ID: {{ u.numero_identidad }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="user-card-actions">
+                            <button class="more-button user-more-btn" type="button" aria-label="Ver más sobre {{ u.nombre_completo or u.usuario }}">
+                                Ver más
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M5 12h14m-6-6 6 6-6 6" />
+                                </svg>
+                            </button>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                <p class="empty-search" id="empty-users-search" hidden>No se encontraron usuarios que coincidan con la búsqueda.</p>
+            </div>
+            {% endif %}
         </div>
     </section>
 </main>
@@ -300,10 +451,23 @@
                     <span>Nombre</span>
                     <input id="new-item-name" name="nombre" type="text" maxlength="120" required>
                 </label>
-                <label class="admin-field" for="new-item-category">
-                    <span>Categoría</span>
-                    <input id="new-item-category" name="categoria" type="text" maxlength="60" value="General">
-                </label>
+                <div class="admin-field">
+                    <label for="new-item-category"><span>Categoría</span></label>
+                    <div class="category-select-group">
+                        <select id="new-item-category" name="categoria" required>
+                            {% for cat in categorias %}
+                            <option value="{{ cat.nombre }}" {% if cat.nombre == 'General' %}selected{% endif %}>{{ cat.nombre }}</option>
+                            {% endfor %}
+                            <option value="__NEW_CATEGORY__" class="category-new-option">➕ Agregar categoría nueva...</option>
+                        </select>
+                        <button class="btn-category-action" id="btn-quick-add-category" type="button" title="Agregar categoría nueva">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14" />
+                            </svg>
+                            <span>Agregar categoría nueva</span>
+                        </button>
+                    </div>
+                </div>
                 <label class="admin-field admin-field--full" for="new-item-description">
                     <span>Descripción</span>
                     <textarea id="new-item-description" name="descripcion" rows="3" maxlength="4000" required></textarea>
@@ -335,6 +499,80 @@
                 <button class="withdraw-button" id="create-item-button" type="submit">Guardar artículo</button>
             </div>
         </form>
+    </div>
+</dialog>
+
+<dialog class="item-dialog admin-dialog category-mini-dialog" id="add-category-dialog" aria-labelledby="add-category-title">
+    <button class="dialog-close" id="close-add-category" type="button" aria-label="Cerrar ventana">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">GESTIÓN DE CATEGORÍAS</p>
+        <h2 id="add-category-title">Agregar categoría nueva</h2>
+        <form id="create-category-form" data-create-url="{{ url_for('inventario.crear_categoria') }}">
+            <div class="admin-form-grid">
+                <label class="admin-field admin-field--full" for="new-category-name">
+                    <span>Nombre de la categoría</span>
+                    <input id="new-category-name" name="nombre" type="text" maxlength="60" placeholder="Ej. Maquinaria pesada" required autocomplete="off">
+                </label>
+            </div>
+            <p class="dialog-message" id="create-category-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions admin-form-actions--split">
+                <button class="btn-dialog-secondary" id="cancel-add-category" type="button">Cancelar</button>
+                <button class="withdraw-button" id="create-category-button" type="submit">Guardar categoría</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog class="item-dialog user-detail-dialog" id="user-detail-dialog" aria-labelledby="user-detail-name">
+    <button class="dialog-close" id="close-user-detail" type="button" aria-label="Cerrar detalle">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="dialog-layout user-dialog-layout">
+        <div class="user-dialog-photo-wrap">
+            <img class="user-dialog-photo" id="user-detail-photo" alt="" hidden>
+            <div class="user-dialog-fallback" id="user-detail-fallback" aria-hidden="true"></div>
+        </div>
+        <div class="dialog-content">
+            <div class="user-dialog-header-meta">
+                <p class="eyebrow">FICHA DE USUARIO / EMPLEADO</p>
+                <span class="user-role-badge" id="user-detail-badge"></span>
+            </div>
+            <h2 id="user-detail-name"></h2>
+            <p class="user-dialog-handle" id="user-detail-handle"></p>
+
+            <dl class="item-details user-detail-specs">
+                <div>
+                    <dt>Nombre de usuario</dt>
+                    <dd id="user-detail-username"></dd>
+                </div>
+                <div>
+                    <dt>Rol en la empresa</dt>
+                    <dd id="user-detail-role-desc"></dd>
+                </div>
+                <div>
+                    <dt>N° de Identificación</dt>
+                    <dd id="user-detail-identity"></dd>
+                </div>
+                <div>
+                    <dt>Correo electrónico</dt>
+                    <dd id="user-detail-email"></dd>
+                </div>
+                <div>
+                    <dt>Teléfono de contacto</dt>
+                    <dd id="user-detail-phone"></dd>
+                </div>
+                <div>
+                    <dt>Dirección de residencia</dt>
+                    <dd id="user-detail-address"></dd>
+                </div>
+            </dl>
+        </div>
     </div>
 </dialog>
 {% endif %}
