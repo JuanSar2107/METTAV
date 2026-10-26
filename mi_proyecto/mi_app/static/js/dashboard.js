@@ -130,9 +130,13 @@
     const updateSummary = () => {
         const totalUnits = cards.reduce((total, card) => total + Number(card.dataset.stock), 0);
         const lowStock = cards.filter((card) => Number(card.dataset.stock) <= 5).length;
+        const categoryCount = new Set(cards.map((card) => (card.dataset.category || "").trim()).filter(Boolean)).size;
         document.querySelector("#summary-items").textContent = cards.length;
         document.querySelector("#summary-units").textContent = totalUnits;
         document.querySelector("#summary-low-stock").textContent = lowStock;
+        document.querySelector("#summary-category-count").textContent = `${categoryCount} ${categoryCount === 1 ? "categoría" : "categorías"}`;
+        document.querySelector("#summary-low-stock-caption").textContent = lowStock ? "Requiere reabastecimiento" : "Todo en orden";
+        document.querySelector("#summary-low-stock-card").classList.toggle("is-clear", lowStock === 0);
     };
 
     const updateResultsCount = () => {
@@ -141,13 +145,18 @@
         emptySearch.hidden = visibleCount > 0;
     };
 
+    const normalizeSearchText = (value) =>
+        value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
     const applyFilters = () => {
-        const query = searchInput instanceof HTMLInputElement ? searchInput.value.trim().toLocaleLowerCase("es") : "";
-        const selectedCategory = categoryFilter instanceof HTMLSelectElement ? categoryFilter.value.trim().toLocaleLowerCase("es") : "";
+        const query = searchInput instanceof HTMLInputElement ? normalizeSearchText(searchInput.value.trim()) : "";
+        const selectedCategory = categoryFilter instanceof HTMLSelectElement
+            ? normalizeSearchText(categoryFilter.value.trim())
+            : "";
 
         cards.forEach((card) => {
-            const content = `${card.dataset.name} ${card.dataset.code} ${card.dataset.category}`.toLocaleLowerCase("es");
-            const cardCategory = (card.dataset.category || "").trim().toLocaleLowerCase("es");
+            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.category || ""}`);
+            const cardCategory = normalizeSearchText((card.dataset.category || "").trim());
 
             const matchesQuery = !query || content.includes(query);
             const matchesCategory = !selectedCategory || cardCategory === selectedCategory;
