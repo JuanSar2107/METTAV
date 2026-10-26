@@ -12,6 +12,7 @@ class ArticuloInventario(db.Model):
     categoria = db.Column(db.String(60), nullable=False)
     descripcion = db.Column(db.Text, nullable=False)
     stock = db.Column(db.Integer, nullable=False, default=0)
+    stock_maximo = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     unidad = db.Column(db.String(24), nullable=False, default="unidades")
     ubicacion = db.Column(db.String(80), nullable=False)
     imagen_url = db.Column(db.String(500), nullable=False)

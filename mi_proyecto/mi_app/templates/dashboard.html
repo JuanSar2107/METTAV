@@ -173,9 +173,11 @@
                     data-description="{{ articulo.descripcion }}"
                     data-location="{{ articulo.ubicacion }}"
                     data-stock="{{ articulo.stock }}"
+                    data-max-stock="{{ articulo.stock_maximo }}"
                     data-unit="{{ articulo.unidad }}"
                     data-image="{{ articulo.imagen_url }}"
                     data-withdraw-url="{{ url_for('inventario.retirar_articulo', id_articulo=articulo.id) }}"
+                    data-entry-url="{{ url_for('inventario.ingresar_articulo', id_articulo=articulo.id) }}"
                     data-delete-url="{{ url_for('inventario.eliminar_articulo', id_articulo=articulo.id) }}"
                 >
                     <div class="item-image-wrap">
@@ -410,7 +412,16 @@
                 <div><dt>Código</dt><dd id="dialog-code"></dd></div>
                 <div><dt>Ubicación</dt><dd id="dialog-location"></dd></div>
                 <div><dt>Stock actual</dt><dd id="dialog-stock"></dd></div>
+                <div><dt>Stock máximo</dt><dd id="dialog-stock-max"></dd></div>
             </dl>
+            <form class="withdraw-form entry-form" id="entry-form">
+                <label for="entry-quantity">Unidades a ingresar</label>
+                <div class="withdraw-controls">
+                    <input id="entry-quantity" name="cantidad" type="number" min="1" step="1" value="1" required>
+                    <button class="entry-button" id="entry-button" type="submit">Ingresar objeto</button>
+                </div>
+                <p class="dialog-message" id="entry-message" role="status" aria-live="polite" hidden></p>
+            </form>
             <form class="withdraw-form" id="withdraw-form">
                 <label for="withdraw-quantity">Unidades a retirar</label>
                 <div class="withdraw-controls">

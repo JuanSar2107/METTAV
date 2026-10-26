@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request, session
-from sqlalchemy import update
+from sqlalchemy import case, update
 from sqlalchemy.exc import IntegrityError
 
 from mi_app.extensions import db
@@ -65,6 +65,7 @@ def crear_articulo():
         categoria=categoria,
         descripcion=descripcion,
         stock=stock,
+        stock_maximo=stock,
         unidad=unidad,
         ubicacion=ubicacion,
         imagen_url=imagen_url,
@@ -194,12 +195,24 @@ def retirar_articulo(id_articulo: int):
 
     resultado = db.session.execute(
         update(ArticuloInventario)
-        .where(ArticuloInventario.id == id_articulo, ArticuloInventario.stock >= cantidad)
+        .where(
+            ArticuloInventario.id == id_articulo,
+            ArticuloInventario.stock >= cantidad,
+            ArticuloInventario.stock_maximo >= cantidad,
+        )
         .values(stock=ArticuloInventario.stock - cantidad)
     )
     if resultado.rowcount == 0:
         db.session.rollback()
         articulo = db.session.get(ArticuloInventario, id_articulo)
+        if articulo is None:
+            return jsonify(error="El artículo no existe."), 404
+        if cantidad > articulo.stock_maximo:
+            return jsonify(
+                error="La cantidad supera el límite original del artículo.",
+                stock=articulo.stock,
+                stock_maximo=articulo.stock_maximo,
+            ), 409
         return jsonify(error="No hay suficientes unidades en stock.", stock=articulo.stock), 409
 
     movimiento = MovimientoInventario(
@@ -216,6 +229,77 @@ def retirar_articulo(id_articulo: int):
     db.session.commit()
     articulo = db.session.get(ArticuloInventario, id_articulo)
     return jsonify(
-        articulo={"id": articulo.id, "stock": articulo.stock, "unidad": articulo.unidad},
+        articulo={
+            "id": articulo.id,
+            "stock": articulo.stock,
+            "stock_maximo": articulo.stock_maximo,
+            "unidad": articulo.unidad,
+        },
+        movimiento=movimiento.to_dict(),
+    )
+
+
+@inventario_bp.post("/<int:id_articulo>/ingresar")
+def ingresar_articulo(id_articulo: int):
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+
+    datos = request.get_json(silent=True)
+    cantidad = datos.get("cantidad") if isinstance(datos, dict) else None
+    if isinstance(cantidad, bool) or not isinstance(cantidad, int) or cantidad < 1:
+        return jsonify(error="Indica una cantidad entera mayor que cero."), 400
+
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    if articulo is None:
+        return jsonify(error="El artículo no existe."), 404
+
+    resultado = db.session.execute(
+        update(ArticuloInventario)
+        .where(
+            ArticuloInventario.id == id_articulo,
+            (ArticuloInventario.stock_maximo == 0)
+            | (ArticuloInventario.stock + cantidad <= ArticuloInventario.stock_maximo),
+        )
+        .values(
+            stock=ArticuloInventario.stock + cantidad,
+            stock_maximo=case(
+                (ArticuloInventario.stock_maximo == 0, ArticuloInventario.stock + cantidad),
+                else_=ArticuloInventario.stock_maximo,
+            ),
+        )
+    )
+    if resultado.rowcount == 0:
+        db.session.rollback()
+        articulo = db.session.get(ArticuloInventario, id_articulo)
+        if articulo is None:
+            return jsonify(error="El artículo no existe."), 404
+        return jsonify(
+            error="El ingreso supera el límite de stock del artículo.",
+            stock=articulo.stock,
+            stock_maximo=articulo.stock_maximo,
+            disponible=max(0, articulo.stock_maximo - articulo.stock),
+        ), 409
+
+    movimiento = MovimientoInventario(
+        empleado=usuario.nombre_completo or usuario.usuario,
+        usuario=usuario.usuario,
+        articulo=articulo.nombre,
+        codigo_articulo=articulo.codigo,
+        categoria=articulo.categoria,
+        tipo="Ingreso",
+        cantidad=cantidad,
+        unidad=articulo.unidad,
+    )
+    db.session.add(movimiento)
+    db.session.commit()
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    return jsonify(
+        articulo={
+            "id": articulo.id,
+            "stock": articulo.stock,
+            "stock_maximo": articulo.stock_maximo,
+            "unidad": articulo.unidad,
+        },
         movimiento=movimiento.to_dict(),
     )

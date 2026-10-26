@@ -142,6 +142,31 @@ def create_app(test_config: dict | None = None) -> Flask:
                     )
                 )
 
+        article_columns = {
+            column["name"]
+            for column in inspect(db.engine).get_columns("articulos_inventario")
+        }
+        if "stock_maximo" not in article_columns:
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE articulos_inventario "
+                        "ADD COLUMN stock_maximo INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "UPDATE articulos_inventario SET stock_maximo = MAX("
+                        "stock, "
+                        "COALESCE((SELECT SUM(cantidad) FROM movimientos_inventario "
+                        "WHERE movimientos_inventario.codigo_articulo = articulos_inventario.codigo "
+                        "AND tipo = 'Ingreso'), 0), "
+                        "stock + COALESCE((SELECT SUM(cantidad) FROM movimientos_inventario "
+                        "WHERE movimientos_inventario.codigo_articulo = articulos_inventario.codigo "
+                        "AND tipo = 'Retiro'), 0))"
+                    )
+                )
+
         indexes = inspect(db.engine).get_indexes("usuarios")
         constraints = inspect(db.engine).get_unique_constraints("usuarios")
         unique_columns = {

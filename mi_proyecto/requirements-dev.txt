@@ -1,3 +1,4 @@
 # Dependencias para desarrollo y testeo (no van en la imagen Docker)
 -r requirements.txt
 pytest>=8,<9
+pytest-cov>=5,<7

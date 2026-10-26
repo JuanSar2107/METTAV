@@ -20,6 +20,7 @@ def crear_articulo(app):
                 categoria=campos.get("categoria", "General"),
                 descripcion=campos.get("descripcion", "Descripción de prueba."),
                 stock=stock,
+                stock_maximo=campos.get("stock_maximo", stock),
                 unidad=campos.get("unidad", "unidades"),
                 ubicacion=campos.get("ubicacion", "Estante Z"),
                 imagen_url=campos.get("imagen_url", "https://ejemplo.com/imagen.png"),
@@ -90,6 +91,7 @@ def test_crear_articulo_admin(client, app, creador_usuarios, iniciar_sesion, ima
         guardado = db.session.get(ArticuloInventario, articulo["id"])
         assert guardado is not None
         assert guardado.stock == 5
+        assert guardado.stock_maximo == 5
         movimiento = MovimientoInventario.query.filter_by(codigo_articulo=guardado.codigo).one()
         assert movimiento.tipo == "Ingreso"
         assert movimiento.cantidad == 5
@@ -145,6 +147,7 @@ def test_retirar_articulo(client, app, crear_articulo, creador_usuarios, iniciar
     respuesta = client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 3})
     assert respuesta.status_code == 200
     assert respuesta.get_json()["articulo"]["stock"] == 7
+    assert respuesta.get_json()["articulo"]["stock_maximo"] == 10
     movimiento = respuesta.get_json()["movimiento"]
     assert movimiento["empleado"] == "ana"
     assert movimiento["articulo"] == "Taladro"
@@ -157,6 +160,69 @@ def test_retirar_articulo(client, app, crear_articulo, creador_usuarios, iniciar
         guardado = db.session.get(MovimientoInventario, movimiento["id"])
         assert guardado is not None
         assert guardado.usuario == "ana"
+
+
+def test_ingresar_articulo(client, app, crear_articulo, creador_usuarios, iniciar_sesion):
+    id_articulo = crear_articulo(codigo="ART-INGRESO", stock=4, stock_maximo=7)
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+
+    respuesta = client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 3})
+    assert respuesta.status_code == 200
+    datos = respuesta.get_json()
+    assert datos["articulo"]["stock"] == 7
+    assert datos["movimiento"]["empleado"] == "ana"
+    assert datos["movimiento"]["tipo"] == "Ingreso"
+    assert datos["movimiento"]["cantidad"] == 3
+
+    with app.app_context():
+        guardado = db.session.get(ArticuloInventario, id_articulo)
+        assert guardado.stock == 7
+        movimiento = db.session.get(MovimientoInventario, datos["movimiento"]["id"])
+        assert movimiento.usuario == "ana"
+
+
+def test_ingreso_no_supera_stock_maximo(client, crear_articulo, creador_usuarios, iniciar_sesion):
+    id_articulo = crear_articulo(codigo="ART-LIMITE", stock=10)
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+
+    assert client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 4}).status_code == 200
+    respuesta = client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 4})
+    assert respuesta.status_code == 200
+    assert respuesta.get_json()["articulo"]["stock"] == 10
+
+    excedente = client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 1})
+    assert excedente.status_code == 409
+    assert excedente.get_json()["stock"] == 10
+    assert excedente.get_json()["stock_maximo"] == 10
+    assert excedente.get_json()["disponible"] == 0
+
+
+def test_retiro_no_supera_stock_maximo(client, app, crear_articulo, creador_usuarios, iniciar_sesion):
+    id_articulo = crear_articulo(codigo="ART-LIMITE-RETIRO", stock=10)
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    with app.app_context():
+        articulo = db.session.get(ArticuloInventario, id_articulo)
+        articulo.stock = 12
+        db.session.commit()
+
+    respuesta = client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 11})
+    assert respuesta.status_code == 409
+    assert respuesta.get_json()["stock_maximo"] == 10
+
+
+def test_ingresar_articulo_valida_sesion_cantidad_y_existencia(
+    client, crear_articulo, creador_usuarios, iniciar_sesion
+):
+    id_articulo = crear_articulo(codigo="ART-INGRESO-VALIDACION")
+    assert client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 1}).status_code == 401
+
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    assert client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 0}).status_code == 400
+    assert client.post("/api/inventario/999999/ingresar", json={"cantidad": 1}).status_code == 404
 
 
 def test_historial_movimientos_solo_admin(client, creador_usuarios, iniciar_sesion):

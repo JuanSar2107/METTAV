@@ -94,7 +94,10 @@ def _inventario_inicial():
     clave = "inventario_demo_inicializado"
     if db.session.get(ConfiguracionSistema, clave) is None:
         if db.session.query(ArticuloInventario.id).first() is None:
-            db.session.add_all(ArticuloInventario(**articulo) for articulo in _INVENTARIO_INICIAL)
+            db.session.add_all(
+                ArticuloInventario(**articulo, stock_maximo=articulo["stock"])
+                for articulo in _INVENTARIO_INICIAL
+            )
         db.session.add(ConfiguracionSistema(clave=clave, valor="1"))
         db.session.commit()
     return ArticuloInventario.query.order_by(ArticuloInventario.id).all()

@@ -886,6 +886,33 @@ body {
     background: var(--blue-dark);
 }
 
+.entry-button {
+    min-height: 44px;
+    flex: 1;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 7px;
+    background: #39704c;
+    color: #fff;
+    font: 700 14px 'Barlow', sans-serif;
+    cursor: pointer;
+    transition: background 0.18s;
+}
+
+.entry-button:hover:not(:disabled) {
+    background: #2d5e3d;
+}
+
+.entry-button:focus-visible {
+    outline: 3px solid rgba(75, 155, 213, 0.48);
+    outline-offset: 2px;
+}
+
+.entry-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
 .withdraw-button:disabled {
     cursor: not-allowed;
     opacity: 0.55;

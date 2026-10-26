@@ -6,6 +6,10 @@
     const resultsCount = document.querySelector("#results-count");
     const emptySearch = document.querySelector("#empty-search");
     const dialog = document.querySelector("#item-dialog");
+    const entryForm = document.querySelector("#entry-form");
+    const entryButton = document.querySelector("#entry-button");
+    const entryQuantityInput = document.querySelector("#entry-quantity");
+    const entryMessage = document.querySelector("#entry-message");
     const withdrawForm = document.querySelector("#withdraw-form");
     const withdrawButton = document.querySelector("#withdraw-button");
     const quantityInput = document.querySelector("#withdraw-quantity");
@@ -470,6 +474,20 @@
     const detailCode = document.querySelector("#dialog-code");
     const detailLocation = document.querySelector("#dialog-location");
     const detailStock = document.querySelector("#dialog-stock");
+    const detailStockMax = document.querySelector("#dialog-stock-max");
+
+    const updateStockLimits = (card) => {
+        const stock = Number(card.dataset.stock);
+        const maxStock = Number(card.dataset.maxStock);
+        const entryAvailable = maxStock > 0 ? Math.max(0, maxStock - stock) : null;
+        detailStockMax.textContent = maxStock > 0
+            ? `${maxStock} ${card.dataset.unit}`
+            : "Se define con el primer ingreso";
+        quantityInput.max = String(Math.min(stock, maxStock || stock));
+        entryQuantityInput.max = entryAvailable === null ? "" : String(entryAvailable);
+        entryQuantityInput.disabled = entryAvailable === 0;
+        entryButton.disabled = entryAvailable === 0;
+    };
 
     const showMessage = (text, state = "success") => {
         message.textContent = text;
@@ -488,12 +506,20 @@
         detailCode.textContent = card.dataset.code;
         detailLocation.textContent = card.dataset.location;
         detailStock.textContent = `${card.dataset.stock} ${card.dataset.unit}`;
-        quantityInput.max = card.dataset.stock;
+        updateStockLimits(card);
         quantityInput.value = Number(card.dataset.stock) > 0 ? "1" : "";
         quantityInput.disabled = Number(card.dataset.stock) === 0;
         withdrawButton.disabled = Number(card.dataset.stock) === 0;
+        entryQuantityInput.value = "1";
+        entryMessage.hidden = true;
         message.hidden = true;
         dialog.showModal();
+    };
+
+    const showEntryMessage = (text, state = "success") => {
+        entryMessage.textContent = text;
+        entryMessage.dataset.state = state;
+        entryMessage.hidden = false;
     };
 
     document.querySelectorAll(".more-button").forEach((button) => {
@@ -508,6 +534,64 @@
         }
     });
 
+    if (entryForm instanceof HTMLFormElement) {
+        entryForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!selectedCard) {
+                return;
+            }
+
+            const quantity = Number(entryQuantityInput.value);
+            const maxStock = Number(selectedCard.dataset.maxStock);
+            const currentStock = Number(selectedCard.dataset.stock);
+            const available = maxStock > 0 ? maxStock - currentStock : Infinity;
+            if (!Number.isInteger(quantity) || quantity < 1 || quantity > available) {
+                showEntryMessage(
+                    maxStock > 0
+                        ? `Puedes ingresar hasta ${Math.max(0, available)} ${selectedCard.dataset.unit}.`
+                        : "Indica una cantidad entera mayor que cero.",
+                    "error",
+                );
+                return;
+            }
+
+            entryButton.disabled = true;
+            entryMessage.hidden = true;
+            try {
+                const response = await fetch(selectedCard.dataset.entryUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cantidad: quantity }),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || "No se pudo ingresar el artículo.");
+                }
+
+                selectedCard.dataset.stock = result.articulo.stock;
+                selectedCard.dataset.maxStock = result.articulo.stock_maximo;
+                const stockLabel = selectedCard.querySelector(".stock-label");
+                selectedCard.querySelector(".stock-value").textContent = result.articulo.stock;
+                selectedCard.querySelector(".stock-unit").textContent = `${selectedCard.dataset.unit} disponibles`;
+                stockLabel.classList.toggle("is-low", result.articulo.stock <= 5);
+                detailStock.textContent = `${result.articulo.stock} ${result.articulo.unidad}`;
+                updateStockLimits(selectedCard);
+                updateSummary();
+                if (typeof renderMovementHistory === "function") {
+                    movementRecords.unshift(result.movimiento);
+                    renderMovementHistory();
+                }
+                dialog.close();
+                showToast(`Ingresaste ${quantity} ${quantity === 1 ? "unidad" : "unidades"} de ${selectedCard.dataset.name}.`);
+            } catch (error) {
+                showEntryMessage(error.message || "No se pudo conectar con el servidor.", "error");
+            } finally {
+                const maxStock = Number(selectedCard.dataset.maxStock);
+                entryButton.disabled = maxStock > 0 && Number(selectedCard.dataset.stock) >= maxStock;
+            }
+        });
+    }
+
     if (withdrawForm instanceof HTMLFormElement) {
         withdrawForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -516,7 +600,9 @@
             }
 
             const quantity = Number(quantityInput.value);
-            const available = Number(selectedCard.dataset.stock);
+            const stock = Number(selectedCard.dataset.stock);
+            const maxStock = Number(selectedCard.dataset.maxStock);
+            const available = Math.min(stock, maxStock || stock);
             if (!Number.isInteger(quantity) || quantity < 1 || quantity > available) {
                 showMessage("Indica una cantidad válida dentro del stock disponible.", "error");
                 return;
@@ -535,12 +621,13 @@
                 }
 
                 selectedCard.dataset.stock = result.articulo.stock;
+                selectedCard.dataset.maxStock = result.articulo.stock_maximo;
                 const stockLabel = selectedCard.querySelector(".stock-label");
                 selectedCard.querySelector(".stock-value").textContent = result.articulo.stock;
                 selectedCard.querySelector(".stock-unit").textContent = `${selectedCard.dataset.unit} disponibles`;
                 stockLabel.classList.toggle("is-low", result.articulo.stock <= 5);
                 detailStock.textContent = `${result.articulo.stock} ${result.articulo.unidad}`;
-                quantityInput.max = result.articulo.stock;
+                updateStockLimits(selectedCard);
                 quantityInput.value = result.articulo.stock > 0 ? "1" : "";
                 quantityInput.disabled = result.articulo.stock === 0;
                 updateSummary();
