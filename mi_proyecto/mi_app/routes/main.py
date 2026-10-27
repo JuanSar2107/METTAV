@@ -23,6 +23,7 @@ _DESCRIPCIONES_RUTAS = {
     "inventario.listar_movimientos": "Lista los retiros de inventario; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
     "inventario.crear_categoria": "Crea una nueva categoría; requiere sesión de administrador.",
+    "asistente.consultar_asistente": "Responde preguntas con Gemini usando el inventario como contexto; requiere sesión.",
     "static": "Entrega archivos estáticos de la aplicación.",
 }
 

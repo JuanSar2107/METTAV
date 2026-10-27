@@ -20,6 +20,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
     ports:
       - "${APP_PORT:-8000}:5000"
     volumes:

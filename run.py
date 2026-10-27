@@ -8,6 +8,11 @@ mi_proyecto_dir = base_dir / "mi_proyecto"
 if str(mi_proyecto_dir) not in sys.path:
     sys.path.insert(0, str(mi_proyecto_dir))
 
+from dotenv import load_dotenv
+
+# Carga las variables de `.env` (SECRET_KEY, GEMINI_API_KEY, ...) al correr en local.
+load_dotenv(base_dir / ".env")
+
 from mi_app import create_app
 
 app = create_app()
