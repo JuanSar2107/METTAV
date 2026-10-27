@@ -124,7 +124,7 @@ def test_consultar_gemini_arma_peticion_y_lee_texto(monkeypatch, con_clave):
     assert texto == "Hay 5 pares."
     peticion = enviadas[0]
     assert peticion.get_header("X-goog-api-key") == "clave-de-prueba"
-    assert "gemini-2.5-flash:generateContent" in peticion.full_url
+    assert "gemini-3.5-flash:generateContent" in peticion.full_url
     cuerpo = json.loads(peticion.data)
     assert [c["role"] for c in cuerpo["contents"]] == ["user", "model"]
 

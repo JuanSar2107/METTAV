@@ -5,7 +5,7 @@ así no se agrega ningún SDK a la imagen Docker.
 
 Variables de entorno:
     GEMINI_API_KEY -> clave de Google AI Studio (https://aistudio.google.com/apikey)
-    GEMINI_MODEL   -> modelo a usar (por defecto: gemini-2.5-flash)
+    GEMINI_MODEL   -> modelo a usar (por defecto: gemini-3.5-flash)
 """
 
 import json
@@ -13,7 +13,7 @@ import os
 import urllib.error
 import urllib.request
 
-MODELO_POR_DEFECTO = "gemini-2.5-flash"
+MODELO_POR_DEFECTO = "gemini-3.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 _TIEMPO_MAXIMO = 45
 

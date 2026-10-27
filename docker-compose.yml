@@ -7,7 +7,7 @@
 #   ADMIN_PASSWORD -> contraseña del primer administrador; solo se usa si ese
 #                     usuario todavía no existe en la base de datos
 #   GEMINI_API_KEY -> clave de Google AI Studio para el asistente con IA
-#   GEMINI_MODEL   -> modelo de Gemini (por defecto: gemini-2.5-flash)
+#   GEMINI_MODEL   -> modelo de Gemini (por defecto: gemini-3.5-flash)
 #
 # Este archivo NO publica puertos del host: Coolify rutea el tráfico desde su
 # proxy hacia el puerto 5000 del contenedor (configúralo en "Ports Exposes").
@@ -26,7 +26,7 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
     # Coolify expone el servicio a través de su propio proxy (dominio + HTTPS),
     # así que NO se publica ningún puerto del host. De lo contrario aparece:
     #   Bind for :::8000 failed: port is already allocated
