@@ -5,6 +5,7 @@ from flask import Flask, jsonify
 from sqlalchemy import inspect, text
 
 from .extensions import db
+from .security import configurar_seguridad, resolver_clave_secreta
 
 
 def _sembrar_admin(app: Flask) -> None:
@@ -80,14 +81,17 @@ def create_app(test_config: dict | None = None) -> Flask:
     database_path = Path(app.root_path).parent / "instance" / "mi_proyecto.sqlite3"
     database_path.parent.mkdir(parents=True, exist_ok=True)
     app.config.from_mapping(
-        SECRET_KEY=os.environ.get("SECRET_KEY", "mettav-dev-key-2026"),
+        SECRET_KEY=None,
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{database_path}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
     )
     if test_config is not None:
         app.config.update(test_config)
+    if not app.config["SECRET_KEY"]:
+        app.config["SECRET_KEY"] = resolver_clave_secreta(database_path.parent)
 
+    configurar_seguridad(app)
     db.init_app(app)
     from .routes.main import main_bp
     from .routes.inventory import inventario_bp

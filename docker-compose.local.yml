@@ -17,7 +17,7 @@ services:
     container_name: mettav-web
     restart: unless-stopped
     environment:
-      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+      SECRET_KEY: ${SECRET_KEY:-}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

@@ -1,12 +1,29 @@
 from flask import Blueprint, jsonify, request, session
 from sqlalchemy.exc import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
 import re
 
 from mi_app.extensions import db
+from mi_app.security import (
+    MIN_LARGO_CONTRASENA,
+    iniciar_sesion_usuario,
+    ip_cliente,
+    limitador,
+    renovar_sello,
+    respuesta_limite,
+    usuario_actual,
+)
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
 from mi_app.models import Usuario
 
 usuarios_bp = Blueprint("usuarios", __name__, url_prefix="/api")
+
+# Fuerza bruta: máximo de fallos por usuario+IP y por IP en la ventana.
+_FALLOS_POR_USUARIO = 5
+_FALLOS_POR_IP = 20
+_VENTANA_LOGIN = 15 * 60
+# Hash de relleno para que un usuario inexistente tarde lo mismo que uno real.
+_HASH_RELLENO = generate_password_hash("relleno-para-igualar-tiempos")
 
 
 def _leer_datos_json() -> dict | None:
@@ -29,10 +46,15 @@ def _respuesta_usuario(usuario: Usuario):
 
 
 def _usuario_actual() -> Usuario | None:
-    id_usuario = session.get("id_usuario")
-    if not isinstance(id_usuario, int):
-        return None
-    return db.session.get(Usuario, id_usuario)
+    return usuario_actual()
+
+
+def _validar_contrasena_nueva(contrasena) -> str | None:
+    if not isinstance(contrasena, str) or not MIN_LARGO_CONTRASENA <= len(contrasena) <= 256:
+        return f"La contraseña debe tener entre {MIN_LARGO_CONTRASENA} y 256 caracteres."
+    if contrasena.isdigit() or contrasena.isalpha():
+        return "La contraseña debe combinar letras y números o símbolos."
+    return None
 
 
 @usuarios_bp.post("/usuarios")
@@ -51,8 +73,9 @@ def registrar_usuario():
     contrasena = datos.get("contrasena")
     if not isinstance(nombre, str) or not nombre.strip() or len(nombre.strip()) > 80:
         return jsonify(error="El campo 'usuario' es obligatorio."), 400
-    if not isinstance(contrasena, str) or len(contrasena) < 4 or len(contrasena) > 256:
-        return jsonify(error="La contraseña debe tener entre 4 y 256 caracteres."), 400
+    error_contrasena = _validar_contrasena_nueva(contrasena)
+    if error_contrasena is not None:
+        return jsonify(error=error_contrasena), 400
 
     nombre = nombre.strip()
     if Usuario.query.filter_by(usuario=nombre).first() is not None:
@@ -93,12 +116,26 @@ def iniciar_sesion():
     if not isinstance(nombre, str) or not isinstance(contrasena, str):
         return jsonify(error="Debes enviar usuario y contraseña."), 400
 
-    usuario = Usuario.query.filter_by(usuario=nombre.strip()).first()
+    nombre = nombre.strip()
+    clave_ip = f"login-ip:{ip_cliente()}"
+    clave_usuario = f"login:{ip_cliente()}:{nombre.lower()}"
+    espera = max(
+        limitador().espera(clave_usuario, _FALLOS_POR_USUARIO, _VENTANA_LOGIN),
+        limitador().espera(clave_ip, _FALLOS_POR_IP, _VENTANA_LOGIN),
+    )
+    if espera:
+        return respuesta_limite(espera, "Demasiados intentos fallidos.")
+
+    usuario = Usuario.query.filter_by(usuario=nombre).first()
+    if usuario is None:
+        check_password_hash(_HASH_RELLENO, contrasena)
     if usuario is None or not usuario.verificar_contrasena(contrasena):
+        limitador().registrar(clave_usuario)
+        limitador().registrar(clave_ip)
         return jsonify(error="Usuario o contraseña incorrectos."), 401
 
-    session.clear()
-    session["id_usuario"] = usuario.id_usuario
+    limitador().limpiar(clave_usuario)
+    iniciar_sesion_usuario(usuario)
     return jsonify(usuario=_respuesta_usuario(usuario))
 
 
@@ -198,16 +235,21 @@ def actualizar_usuario_actual():
         usuario.usuario = nombre
 
     if "contrasena" in datos:
-        contrasena = datos["contrasena"]
-        if not isinstance(contrasena, str) or not contrasena:
-            return jsonify(error="El campo 'contrasena' no puede estar vacío."), 400
-        usuario.establecer_contrasena(contrasena)
+        actual = datos.get("contrasena_actual")
+        if not isinstance(actual, str) or not usuario.verificar_contrasena(actual):
+            return jsonify(error="Para cambiar la contraseña indica la actual en 'contrasena_actual'."), 403
+        error_contrasena = _validar_contrasena_nueva(datos["contrasena"])
+        if error_contrasena is not None:
+            return jsonify(error=error_contrasena), 400
+        usuario.establecer_contrasena(datos["contrasena"])
 
     try:
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
         return jsonify(error="Ese usuario ya está registrado."), 409
+    # La sesión actual sigue abierta; las demás se cierran si cambió la contraseña.
+    renovar_sello(usuario)
     return jsonify(usuario=_respuesta_usuario(usuario))
 
 
@@ -216,6 +258,13 @@ def eliminar_usuario_actual():
     usuario = _usuario_actual()
     if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
+
+    datos = _leer_datos_json() or {}
+    contrasena = datos.get("contrasena")
+    if not isinstance(contrasena, str) or not usuario.verificar_contrasena(contrasena):
+        return jsonify(error="Confirma tu contraseña en 'contrasena' para eliminar la cuenta."), 403
+    if usuario.es_admin and Usuario.query.filter_by(es_admin=True).count() <= 1:
+        return jsonify(error="No puedes eliminar al único administrador."), 409
 
     db.session.delete(usuario)
     db.session.commit()

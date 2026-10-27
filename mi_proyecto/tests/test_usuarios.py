@@ -104,8 +104,10 @@ def test_actualizar_con_usuario_en_uso_409(client, creador_usuarios, iniciar_ses
 def test_actualizar_contrasena(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("ana")
     iniciar_sesion("ana")
-    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva123"})
+    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva123", "contrasena_actual": "clave123"})
     assert respuesta.status_code == 200
+    # La sesión que hizo el cambio sigue abierta
+    assert client.get("/api/usuarios/me").status_code == 200
 
     client.post("/api/logout")
     nuevo_login = client.post("/api/login", json={"usuario": "ana", "contrasena": "nueva123"})
@@ -168,7 +170,7 @@ def test_actualizar_perfil_imagen_invalida(client, creador_usuarios, iniciar_ses
 def test_eliminar_cuenta(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("ana")
     iniciar_sesion("ana")
-    respuesta = client.delete("/api/usuarios/me")
+    respuesta = client.delete("/api/usuarios/me", json={"contrasena": "clave123"})
     assert respuesta.status_code == 200
     assert client.get("/api/usuarios/me").status_code == 401
 
@@ -196,4 +198,4 @@ def test_listar_usuarios_admin_200(client, creador_usuarios, iniciar_sesion):
     assert isinstance(lista, list)
     nombres = [u["usuario"] for u in lista]
     assert "admin" in nombres
-    assert "empleado1" in nombres
+    assert "empleado1" in nombres

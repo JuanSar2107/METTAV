@@ -1,6 +1,7 @@
 from flask import Blueprint, current_app, jsonify, redirect, render_template, session, url_for
 
 from mi_app.extensions import db
+from mi_app.security import usuario_actual
 from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
 
 main_bp = Blueprint('main', __name__)
@@ -105,16 +106,14 @@ def _inventario_inicial():
 
 @main_bp.route('/')
 def login():
-    id_usuario = session.get('id_usuario')
-    if isinstance(id_usuario, int) and db.session.get(Usuario, id_usuario) is not None:
+    if usuario_actual() is not None:
         return redirect(url_for('main.dashboard'))
     return render_template('login.html')
 
 
 @main_bp.route('/dashboard')
 def dashboard():
-    id_usuario = session.get('id_usuario')
-    usuario = db.session.get(Usuario, id_usuario) if isinstance(id_usuario, int) else None
+    usuario = usuario_actual()
     if usuario is None:
         session.clear()
         return redirect(url_for('main.login'))

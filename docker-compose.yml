@@ -2,7 +2,8 @@
 # Ideal para desplegar en Coolify (lee este archivo automáticamente desde la raíz del repo).
 #
 # Variables de entorno opcionales (configúralas como "Variables" en Coolify):
-#   SECRET_KEY     -> clave secreta de Flask (¡cámbiala en producción!)
+#   SECRET_KEY     -> clave secreta de Flask. Si se deja vacía, la app genera una
+#                     aleatoria y la guarda en el volumen de datos (instance/).
 #   ADMIN_USER     -> nombre del primer administrador (por defecto: admin)
 #   ADMIN_PASSWORD -> contraseña del primer administrador; solo se usa si ese
 #                     usuario todavía no existe en la base de datos
@@ -23,7 +24,9 @@ services:
     container_name: mettav-web
     restart: unless-stopped
     environment:
-      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+      SECRET_KEY: ${SECRET_KEY:-}
+      # Detrás del proxy de Coolify: IP real del cliente y detección de HTTPS.
+      TRUST_PROXY: "1"
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_KEY:-}

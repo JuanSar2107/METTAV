@@ -1,7 +1,8 @@
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request
 
 from mi_app import gemini
 from mi_app.extensions import db
+from mi_app.security import limitador, respuesta_limite, usuario_actual
 from mi_app.models import ArticuloInventario, MovimientoInventario, Usuario
 
 asistente_bp = Blueprint("asistente", __name__, url_prefix="/api/asistente")
@@ -11,13 +12,12 @@ _MAX_HISTORIAL = 10
 _MAX_ARTICULOS = 300
 _MAX_MOVIMIENTOS = 40
 _STOCK_BAJO = 5
+# Evita que una sola cuenta agote la cuota de la API de Gemini.
+_CONSULTAS_POR_MINUTO = 15
 
 
 def _usuario_actual() -> Usuario | None:
-    id_usuario = session.get("id_usuario")
-    if not isinstance(id_usuario, int):
-        return None
-    return db.session.get(Usuario, id_usuario)
+    return usuario_actual()
 
 
 def _contexto_inventario(usuario: Usuario) -> str:
@@ -105,6 +105,12 @@ def consultar_asistente():
 
     if not gemini.clave_configurada():
         return jsonify(error="El asistente no está configurado: falta GEMINI_API_KEY."), 503
+
+    clave_limite = f"asistente:{usuario.id_usuario}"
+    espera = limitador().espera(clave_limite, _CONSULTAS_POR_MINUTO, 60)
+    if espera:
+        return respuesta_limite(espera, "Has hecho muchas consultas seguidas.")
+    limitador().registrar(clave_limite)
 
     mensajes = _historial_valido(datos.get("historial"))
     mensajes.append({"rol": "usuario", "texto": pregunta.strip()})

@@ -1,10 +1,11 @@
 from uuid import uuid4
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 from sqlalchemy import case, update
 from sqlalchemy.exc import IntegrityError
 
 from mi_app.extensions import db
+from mi_app.security import usuario_actual
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
 from mi_app.models import ArticuloInventario, Categoria, MovimientoInventario, Usuario
 
@@ -13,10 +14,7 @@ inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
 
 
 def _usuario_actual() -> Usuario | None:
-    id_usuario = session.get("id_usuario")
-    if not isinstance(id_usuario, int):
-        return None
-    return db.session.get(Usuario, id_usuario)
+    return usuario_actual()
 
 
 def _error_admin():
