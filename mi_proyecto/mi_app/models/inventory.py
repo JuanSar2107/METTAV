@@ -30,7 +30,11 @@ class MovimientoInventario(db.Model):
     tipo = db.Column(db.String(16), nullable=False, default="Retiro")
     cantidad = db.Column(db.Integer, nullable=False)
     unidad = db.Column(db.String(24), nullable=False)
-    fecha_hora = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    # Se guarda en UTC sin zona horaria, igual en SQLite y en PostgreSQL;
+    # to_dict() vuelve a marcarla como UTC al enviarla al navegador.
+    fecha_hora = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def to_dict(self):
         fecha_hora = self.fecha_hora

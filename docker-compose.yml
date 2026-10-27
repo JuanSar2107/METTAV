@@ -7,6 +7,7 @@
 #   ADMIN_USER     -> nombre del primer administrador (por defecto: admin)
 #   ADMIN_PASSWORD -> contraseña del primer administrador; solo se usa si ese
 #                     usuario todavía no existe en la base de datos
+#   DATABASE_URL   -> base de datos PostgreSQL (vacía = SQLite en el volumen)
 #   GEMINI_KEY     -> clave de Google AI Studio para el asistente con IA
 #                     (dentro del contenedor la app la lee como GEMINI_API_KEY)
 #   GEMINI_MODEL   -> modelo de Gemini (por defecto: gemini-3.5-flash)
@@ -27,6 +28,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
       # Detrás del proxy de Coolify: IP real del cliente y detección de HTTPS.
       TRUST_PROXY: "1"
+      # Vacía = SQLite en el volumen mettav_data. Para PostgreSQL: postgresql://usuario:clave@host:5432/bd
+      DATABASE_URL: ${DATABASE_URL:-}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_KEY:-}

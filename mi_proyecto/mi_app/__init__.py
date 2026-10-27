@@ -4,6 +4,7 @@ from pathlib import Path
 from flask import Flask, jsonify
 from sqlalchemy import inspect, text
 
+from .database import opciones_motor, url_base_de_datos
 from .extensions import db
 from .security import configurar_seguridad, resolver_clave_secreta
 
@@ -82,12 +83,15 @@ def create_app(test_config: dict | None = None) -> Flask:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     app.config.from_mapping(
         SECRET_KEY=None,
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{database_path}",
+        SQLALCHEMY_DATABASE_URI=url_base_de_datos(database_path),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
     )
     if test_config is not None:
         app.config.update(test_config)
+    app.config.setdefault(
+        "SQLALCHEMY_ENGINE_OPTIONS", opciones_motor(app.config["SQLALCHEMY_DATABASE_URI"])
+    )
     if not app.config["SECRET_KEY"]:
         app.config["SECRET_KEY"] = resolver_clave_secreta(database_path.parent)
 
@@ -107,7 +111,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         db.create_all()
         user_columns = {column["name"] for column in inspect(db.engine).get_columns("usuarios")}
         user_migrations = {
-            "es_admin": "BOOLEAN NOT NULL DEFAULT 0",
+            "es_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
             "nombre_completo": "VARCHAR(120)",
             "correo": "VARCHAR(254)",
             "numero_identidad": "VARCHAR(32)",
@@ -153,6 +157,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             for column in inspect(db.engine).get_columns("articulos_inventario")
         }
         if "stock_maximo" not in article_columns:
+            # SQLite usa MAX(a, b, ...) para el mayor de varios valores; PostgreSQL, GREATEST.
+            mayor = "MAX" if db.engine.dialect.name == "sqlite" else "GREATEST"
             with db.engine.begin() as connection:
                 connection.execute(
                     text(
@@ -162,7 +168,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 )
                 connection.execute(
                     text(
-                        "UPDATE articulos_inventario SET stock_maximo = MAX("
+                        f"UPDATE articulos_inventario SET stock_maximo = {mayor}("
                         "stock, "
                         "COALESCE((SELECT SUM(cantidad) FROM movimientos_inventario "
                         "WHERE movimientos_inventario.codigo_articulo = articulos_inventario.codigo "

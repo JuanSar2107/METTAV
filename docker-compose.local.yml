@@ -18,6 +18,8 @@ services:
     restart: unless-stopped
     environment:
       SECRET_KEY: ${SECRET_KEY:-}
+      # Vacía = SQLite en el volumen mettav_data. Para PostgreSQL: postgresql://usuario:clave@host:5432/bd
+      DATABASE_URL: ${DATABASE_URL:-}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

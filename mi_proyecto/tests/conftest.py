@@ -5,6 +5,7 @@ imágenes temporal, de modo que nunca se tocan la BD ni los archivos
 reales del proyecto.
 """
 
+import os
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -16,6 +17,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mi_app import create_app
+from mi_app.database import normalizar_url
 from mi_app.extensions import db
 from mi_app.models import Usuario  # noqa: E402
 
@@ -27,7 +29,10 @@ def app(tmp_path):
         {
             "TESTING": True,
             "SECRET_KEY": "clave-de-prueba",
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{(tmp_path / 'test.sqlite3').as_posix()}",
+            # TEST_DATABASE_URL permite correr los tests contra PostgreSQL
+            "SQLALCHEMY_DATABASE_URI": normalizar_url(os.environ["TEST_DATABASE_URL"])
+            if os.environ.get("TEST_DATABASE_URL")
+            else f"sqlite:///{(tmp_path / 'test.sqlite3').as_posix()}",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         }
     )
