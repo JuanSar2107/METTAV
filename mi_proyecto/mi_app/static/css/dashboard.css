@@ -1338,6 +1338,70 @@ body {
     font: 500 14px 'Barlow', sans-serif;
 }
 
+.sizfra-fields .sizfra-fields-full {
+    grid-column: 1 / -1;
+}
+
+.trace-open-button {
+    width: 100%;
+    margin: -8px 0 16px;
+}
+
+.trace-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: min(60vh, 520px);
+    margin: 14px 0 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.trace-entry {
+    padding: 10px 12px;
+    border-left: 3px solid #8aa2b6;
+    border-radius: 6px;
+    background: rgba(237, 244, 248, 0.8);
+}
+
+.trace-entry--entry {
+    border-left-color: #2e8b57;
+}
+
+.trace-entry--withdrawal {
+    border-left-color: #c95f50;
+}
+
+.trace-entry--audit {
+    border-left-color: var(--blue);
+}
+
+.trace-entry-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 12px;
+    color: #194065;
+    font-size: 14px;
+}
+
+.trace-entry-header span {
+    color: #6a8092;
+    font-size: 12px;
+}
+
+.trace-entry p {
+    margin: 4px 0 0;
+    color: #274765;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.movement-table td small.movement-notes {
+    font-style: italic;
+}
+
 .sizfra-fields small {
     grid-column: 1 / -1;
     color: #6a8092;

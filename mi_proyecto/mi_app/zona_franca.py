@@ -7,6 +7,7 @@ categoría, la ubicación, el tipo, el consecutivo, la descripción y la marca.
 
 import re
 import unicodedata
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from mi_app.models.inventory import GRUPOS_INVENTARIO, PROCEDENCIAS
@@ -109,6 +110,62 @@ def campos_zona_franca(datos) -> dict:
     }
 
 
+_MESES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
+    "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+}
+_RE_FECHA_TEXTO = re.compile(r"^(\d{1,2})\s+de\s+([a-z]+)\s+(?:de|del)\s+(\d{4})$")
+
+
+def leer_fecha(valor) -> date | None:
+    """Acepta fechas de Excel, '2026-05-08', '08/05/2026' u '08 de mayo del 2026'."""
+    if valor is None or valor == "":
+        return None
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    texto = unicodedata.normalize("NFKD", _texto(valor)).encode("ascii", "ignore").decode().lower()
+    texto = " ".join(texto.split())
+    if not texto:
+        return None
+    for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(texto, formato).date()
+        except ValueError:
+            pass
+    coincidencia = _RE_FECHA_TEXTO.match(texto)
+    if coincidencia and coincidencia.group(2) in _MESES:
+        dia, mes, anio = int(coincidencia.group(1)), _MESES[coincidencia.group(2)], int(coincidencia.group(3))
+        try:
+            return date(anio, mes, dia)
+        except ValueError:
+            pass
+    raise ValueError(f"La fecha '{_texto(valor)}' no es válida. Usa 08/05/2026 o '8 de mayo del 2026'.")
+
+
+def campos_trazabilidad(datos) -> dict:
+    """Valida serial, responsable, fechas y documentos soporte (todos opcionales)."""
+    serial = _texto(datos.get("serial"))
+    if serial.upper() == "N/A":
+        serial = ""
+    textos = {
+        "serial": (serial, 80),
+        "responsable": (_texto(datos.get("responsable")), 120),
+        "documento_soporte": (_texto(datos.get("documento_soporte")), 160),
+        "documento_retiro": (_texto(datos.get("documento_retiro")), 160),
+        "razon_retiro": (_texto(datos.get("razon_retiro")), 2000),
+    }
+    campos = {}
+    for campo, (valor, maximo) in textos.items():
+        if len(valor) > maximo:
+            raise ValueError(f"El campo {campo.replace('_', ' ')} no puede superar {maximo} caracteres.")
+        campos[campo] = valor or None
+    campos["fecha_ingreso"] = leer_fecha(datos.get("fecha_ingreso"))
+    campos["fecha_retiro"] = leer_fecha(datos.get("fecha_retiro"))
+    return campos
+
+
 def normalizar_codigo(texto: str) -> str:
     return _texto(texto).upper()
 
@@ -145,6 +202,15 @@ _ENCABEZADOS = {
     "estado": ("estado",),
     "stock": ("cantidad", "cant", "stock"),
     "unidad": ("unidad", "unidad de medida"),
+    "serial": ("serial", "numero de serie"),
+    "responsable": ("responsable",),
+    "fecha_ingreso": ("fecha de ingreso", "fecha ingreso"),
+    "documento_soporte": ("documento soporte", "documento de ingreso"),
+    "fecha_retiro": ("fecha de retiro", "fecha retiro"),
+    # El Excel tiene dos columnas "Documento soporte": la primera es la del
+    # ingreso y la segunda (después de "Fecha de Retiro") la del retiro.
+    "documento_retiro": ("documento de retiro", "documento soporte retiro", "documento soporte"),
+    "razon_retiro": ("razones por las cuales se retira", "razon de retiro", "razon del retiro"),
 }
 
 
@@ -173,8 +239,11 @@ def grupo_por_ubicacion(ubicacion_sigla: str) -> str:
     return "001"
 
 
-def leer_excel(archivo) -> tuple[list[dict], list[dict]]:
-    """Lee la hoja de inventario y devuelve (filas válidas, errores por fila).
+def leer_excel(archivo) -> tuple[list[dict], list[dict], list[dict]]:
+    """Lee la hoja de inventario y devuelve (filas válidas, errores, avisos).
+
+    Un error deja la fila fuera; un aviso (p. ej. una fecha ilegible) la
+    importa igual pero sin ese dato.
 
     Las columnas de código del Excel son fórmulas: se usa el último valor que
     guardó Excel y, si no lo hay, se arma el código ZF con la misma fórmula
@@ -206,11 +275,14 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict]]:
             "'Código ZF' (o 'Consecutivo') y 'Descripción'."
         )
 
-    validas, errores = [], []
+    validas, errores, avisos = [], [], []
     for numero, fila in enumerate(filas, start=numero_encabezado + 1):
-        def celda(campo):
+        def crudo(campo):
             indice = mapa.get(campo)
-            return _texto(fila[indice]) if indice is not None and indice < len(fila) else ""
+            return fila[indice] if indice is not None and indice < len(fila) else None
+
+        def celda(campo):
+            return _texto(crudo(campo))
 
         descripcion = celda("descripcion")
         if not descripcion:
@@ -241,6 +313,23 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict]]:
             errores.append({"fila": numero, "codigo": codigo, "error": str(error)})
             continue
 
+        datos_trazabilidad = {
+            campo: crudo(campo)
+            for campo in ("serial", "responsable", "fecha_ingreso", "documento_soporte",
+                          "fecha_retiro", "documento_retiro", "razon_retiro")
+        }
+        for campo_fecha in ("fecha_ingreso", "fecha_retiro"):
+            try:
+                leer_fecha(datos_trazabilidad[campo_fecha])
+            except ValueError as error:
+                avisos.append({"fila": numero, "codigo": codigo, "aviso": str(error)})
+                datos_trazabilidad[campo_fecha] = None
+        try:
+            campos.update(campos_trazabilidad(datos_trazabilidad))
+        except ValueError as error:
+            errores.append({"fila": numero, "codigo": codigo, "error": str(error)})
+            continue
+
         stock_texto = celda("stock")
         if stock_texto.isdigit():
             stock = int(stock_texto)
@@ -262,4 +351,4 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict]]:
         })
 
     libro.close()
-    return validas, errores
+    return validas, errores, avisos

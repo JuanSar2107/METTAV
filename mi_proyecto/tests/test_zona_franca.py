@@ -146,7 +146,7 @@ def test_importar_excel_crea_articulos(client, app, admin):
     ])
     respuesta = _importar(client, archivo)
     assert respuesta.status_code == 200
-    assert respuesta.get_json() == {"creados": 4, "actualizados": 0, "errores": []}
+    assert respuesta.get_json() == {"creados": 4, "actualizados": 0, "errores": [], "avisos": []}
 
     with app.app_context():
         banco = ArticuloInventario.query.filter_by(codigo="ZF-MAQ-CO-001").one()
@@ -176,7 +176,7 @@ def test_importar_de_nuevo_actualiza_sin_tocar_stock(client, app, admin):
 
     fila[6] = "Banco hidráulico de componentes"
     respuesta = _importar(client, _excel([fila]))
-    assert respuesta.get_json() == {"creados": 0, "actualizados": 1, "errores": []}
+    assert respuesta.get_json() == {"creados": 0, "actualizados": 1, "errores": [], "avisos": []}
     with app.app_context():
         articulo = ArticuloInventario.query.filter_by(codigo="ZF-MAQ-CO-001").one()
         assert articulo.descripcion == "Banco hidráulico de componentes"

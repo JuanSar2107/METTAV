@@ -189,6 +189,13 @@
                     data-fob="{{ articulo.valor_fob_usd if articulo.valor_fob_usd is not none else '' }}"
                     data-origin="{{ articulo.procedencia or '' }}"
                     data-condition="{{ articulo.estado or '' }}"
+                    data-serial="{{ articulo.serial or '' }}"
+                    data-responsible="{{ articulo.responsable or '' }}"
+                    data-entry-date="{{ articulo.fecha_ingreso.isoformat() if articulo.fecha_ingreso else '' }}"
+                    data-entry-doc="{{ articulo.documento_soporte or '' }}"
+                    data-exit-date="{{ articulo.fecha_retiro.isoformat() if articulo.fecha_retiro else '' }}"
+                    data-exit-doc="{{ articulo.documento_retiro or '' }}"
+                    data-exit-reason="{{ articulo.razon_retiro or '' }}"
                     data-category="{{ articulo.categoria }}"
                     data-description="{{ articulo.descripcion }}"
                     data-location="{{ articulo.ubicacion }}"
@@ -442,7 +449,20 @@
                 <div data-zf-field="fob" hidden><dt>Valor FOB</dt><dd></dd></div>
                 <div data-zf-field="origin" hidden><dt>Procedencia</dt><dd></dd></div>
                 <div data-zf-field="condition" hidden><dt>Estado</dt><dd></dd></div>
+                <div data-zf-field="serial" hidden><dt>Serial</dt><dd></dd></div>
+                <div data-zf-field="responsible" hidden><dt>Responsable</dt><dd></dd></div>
+                <div data-zf-field="entryDate" hidden><dt>Fecha de ingreso</dt><dd></dd></div>
+                <div data-zf-field="entryDoc" hidden><dt>Documento de ingreso</dt><dd></dd></div>
+                <div data-zf-field="exitDate" hidden><dt>Fecha de retiro</dt><dd></dd></div>
+                <div data-zf-field="exitDoc" hidden><dt>Documento de retiro</dt><dd></dd></div>
+                <div data-zf-field="exitReason" hidden><dt>Razón del retiro</dt><dd></dd></div>
             </dl>
+            {% if es_admin %}
+            <button class="btn-dialog-secondary trace-open-button" id="open-trace" type="button"
+                data-trace-url="{{ url_for('inventario.trazabilidad_articulo', codigo='__CODIGO__') }}">
+                Ver trazabilidad completa
+            </button>
+            {% endif %}
             <div class="sizfra-fields" aria-label="Datos de Sizfra del movimiento">
                 <label for="movement-operation">
                     <span>Operación Sizfra</span>
@@ -451,6 +471,10 @@
                 <label for="movement-form-number">
                     <span>Formulario</span>
                     <input id="movement-form-number" type="text" maxlength="24" placeholder="Ej. 1383926" autocomplete="off">
+                </label>
+                <label class="sizfra-fields-full" for="movement-notes">
+                    <span>Observaciones o razón</span>
+                    <input id="movement-notes" type="text" maxlength="2000" placeholder="Ej. Se retira para mantenimiento del banco" autocomplete="off">
                 </label>
                 <small>Opcionales. Se guardan con el ingreso o el retiro para cruzarlo con Sizfra.</small>
             </div>
@@ -721,6 +745,26 @@
                         <option value="Para fabricación"></option>
                     </datalist>
                 </label>
+                <label class="admin-field" for="new-item-serial">
+                    <span>Serial</span>
+                    <input id="new-item-serial" name="serial" type="text" maxlength="80" autocomplete="off">
+                </label>
+                <label class="admin-field" for="new-item-responsible">
+                    <span>Responsable</span>
+                    <input id="new-item-responsible" name="responsable" type="text" maxlength="120" list="new-item-responsible-options" placeholder="Ej. Operativos">
+                    <datalist id="new-item-responsible-options">
+                        <option value="Operativos"></option>
+                        <option value="Directores"></option>
+                    </datalist>
+                </label>
+                <label class="admin-field" for="new-item-entry-date">
+                    <span>Fecha de ingreso</span>
+                    <input id="new-item-entry-date" name="fecha_ingreso" type="date">
+                </label>
+                <label class="admin-field" for="new-item-entry-doc">
+                    <span>Documento soporte</span>
+                    <input id="new-item-entry-doc" name="documento_soporte" type="text" maxlength="160" placeholder="Ej. Remisión No 0001">
+                </label>
                 <label class="admin-field admin-field--full" for="new-item-image">
                     <span>Imagen del artículo</span>
                     <input id="new-item-image" name="imagen" type="file" accept="image/jpeg,image/png,image/webp" required>
@@ -739,6 +783,21 @@
     </div>
 </dialog>
 
+<dialog class="item-dialog admin-dialog" id="trace-dialog" aria-labelledby="trace-title">
+    <button class="dialog-close" id="close-trace" type="button" aria-label="Cerrar trazabilidad">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">TRAZABILIDAD</p>
+        <h2 id="trace-title"></h2>
+        <p class="role-note" id="trace-summary"></p>
+        <p class="dialog-message" id="trace-message" role="status" aria-live="polite" hidden></p>
+        <ol class="trace-list" id="trace-list"></ol>
+    </div>
+</dialog>
+
 <dialog class="item-dialog admin-dialog" id="import-items-dialog" aria-labelledby="import-items-title">
     <button class="dialog-close" id="close-import-items" type="button" aria-label="Cerrar ventana">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -753,7 +812,7 @@
                 <label class="admin-field admin-field--full" for="import-items-file">
                     <span>Archivo Excel (.xlsx)</span>
                     <input id="import-items-file" name="archivo" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-                    <small>Columnas que reconoce: Código interno, Código ZF, Categoría, Ubicación, Tipo, Consecutivo, Descripción y Marca. Opcionales: Grupo, Subpartida, Valor FOB, Procedencia, Estado, Cantidad y Unidad.</small>
+                    <small>Columnas que reconoce: Código interno, Código ZF, Categoría, Ubicación, Tipo, Consecutivo, Descripción y Marca. Opcionales: Grupo, Subpartida, valor USD, Procedencia, Estado, Cantidad, Unidad, Serial, Responsable, Fecha de ingreso, Documento soporte, Fecha de retiro y razón del retiro.</small>
                 </label>
             </div>
             <p class="role-note">Los artículos se identifican por el código ZF. Si un código ya existe se actualizan sus datos, pero no su stock.</p>

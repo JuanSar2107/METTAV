@@ -25,6 +25,7 @@ _DESCRIPCIONES_RUTAS = {
     "inventario.retirar_articulo": "Retira unidades del stock de un artículo autenticado.",
     "inventario.crear_salida_integrada": "Da de baja en un solo registro un equipo y las partes que se le integraron; requiere sesión.",
     "inventario.obtener_salida_integrada": "Devuelve una salida integrada con el equipo y sus partes; requiere sesión.",
+    "inventario.trazabilidad_articulo": "Devuelve los movimientos y la auditoría de un código, aunque el artículo se haya eliminado; requiere sesión de administrador.",
     "inventario.listar_movimientos": "Lista los retiros de inventario; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
     "inventario.crear_categoria": "Crea una nueva categoría; requiere sesión de administrador.",

@@ -15,6 +15,44 @@ PROCEDENCIAS = ("Nacional", "Extranjera")
 # Para qué se integran las partes en una salida integrada.
 PROCESOS_INTEGRACION = ("Fabricación", "Reparación", "Mantenimiento", "Overhaul", "Otro")
 
+# Por dónde se registró un movimiento.
+ORIGEN_MANUAL = "Manual"
+ORIGEN_ALTA = "Alta de artículo"
+ORIGEN_IMPORTACION = "Importación Excel"
+ORIGEN_SALIDA_INTEGRADA = "Salida integrada"
+
+
+class RegistroAuditoria(db.Model):
+    """Acciones sobre el inventario que no son movimientos de stock.
+
+    Crear, actualizar (por importación) y eliminar artículos, e importar el
+    Excel. Se guarda el código del artículo como texto para que el registro
+    sobreviva aunque el artículo se elimine.
+    """
+
+    __tablename__ = "registro_auditoria"
+
+    id = db.Column(db.Integer, primary_key=True)
+    accion = db.Column(db.String(40), nullable=False)
+    codigo_articulo = db.Column(db.String(24), index=True)
+    detalle = db.Column(db.Text)
+    empleado = db.Column(db.String(120), nullable=False)
+    usuario = db.Column(db.String(80), nullable=False)
+    fecha_hora = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "accion": self.accion,
+            "codigo_articulo": self.codigo_articulo,
+            "detalle": self.detalle,
+            "empleado": self.empleado,
+            "usuario": self.usuario,
+            "fecha_hora": self.fecha_hora.replace(tzinfo=timezone.utc).isoformat(timespec="seconds"),
+        }
+
 
 class SalidaIntegrada(db.Model):
     """Una salida en la que a un equipo se le integraron partes del inventario.
@@ -70,6 +108,14 @@ class ArticuloInventario(db.Model):
     valor_fob_usd = db.Column(db.Numeric(14, 2))
     procedencia = db.Column(db.String(20))
     estado = db.Column(db.String(40))
+    # Trazabilidad del activo (columnas del Excel de inventario).
+    serial = db.Column(db.String(80))
+    responsable = db.Column(db.String(120))
+    fecha_ingreso = db.Column(db.Date)
+    documento_soporte = db.Column(db.String(160))
+    fecha_retiro = db.Column(db.Date)
+    documento_retiro = db.Column(db.String(160))
+    razon_retiro = db.Column(db.Text)
     nombre = db.Column(db.String(120), nullable=False)
     categoria = db.Column(db.String(60), nullable=False)
     descripcion = db.Column(db.Text, nullable=False)
@@ -104,6 +150,9 @@ class MovimientoInventario(db.Model):
     id_salida = db.Column(db.Integer, db.ForeignKey("salidas_integradas.id"))
     rol = db.Column(db.String(12))
     salida = db.relationship("SalidaIntegrada", back_populates="movimientos")
+    # Por dónde se registró (ver ORIGENES_MOVIMIENTO) y la razón u observación.
+    origen = db.Column(db.String(20))
+    observaciones = db.Column(db.Text)
 
     def to_dict(self):
         fecha_hora = self.fecha_hora
@@ -126,6 +175,8 @@ class MovimientoInventario(db.Model):
             "rol": self.rol,
             "proceso": self.salida.proceso if self.salida else None,
             "referencia": self.salida.referencia if self.salida else None,
+            "origen": self.origen,
+            "observaciones": self.observaciones,
         }
 
 

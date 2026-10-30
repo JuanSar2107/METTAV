@@ -9,9 +9,28 @@ from sqlalchemy.exc import IntegrityError
 from mi_app.extensions import db
 from mi_app.security import usuario_actual
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
-from mi_app.models import ArticuloInventario, Categoria, MovimientoInventario, SalidaIntegrada, Usuario
-from mi_app.models.inventory import PROCESOS_INTEGRACION
-from mi_app.zona_franca import campos_zona_franca, codigo_valido, leer_excel, normalizar_codigo
+from mi_app.models import (
+    ArticuloInventario,
+    Categoria,
+    MovimientoInventario,
+    RegistroAuditoria,
+    SalidaIntegrada,
+    Usuario,
+)
+from mi_app.models.inventory import (
+    ORIGEN_ALTA,
+    ORIGEN_IMPORTACION,
+    ORIGEN_MANUAL,
+    ORIGEN_SALIDA_INTEGRADA,
+    PROCESOS_INTEGRACION,
+)
+from mi_app.zona_franca import (
+    campos_trazabilidad,
+    campos_zona_franca,
+    codigo_valido,
+    leer_excel,
+    normalizar_codigo,
+)
 
 inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
 
@@ -32,6 +51,24 @@ def _datos_sizfra(datos) -> dict:
 
 def _cantidad_valida(cantidad) -> bool:
     return not isinstance(cantidad, bool) and isinstance(cantidad, int) and cantidad >= 1
+
+
+def _observaciones(datos) -> str | None:
+    texto = str(datos.get("observaciones") or "").strip()
+    if len(texto) > 2000:
+        raise ValueError("Las observaciones no pueden superar 2000 caracteres.")
+    return texto or None
+
+
+def _auditar(usuario: Usuario, accion: str, codigo: str | None = None, detalle: str | None = None) -> None:
+    """Agrega a la sesión un registro de auditoría (se guarda con el commit)."""
+    db.session.add(RegistroAuditoria(
+        accion=accion,
+        codigo_articulo=codigo,
+        detalle=detalle,
+        empleado=usuario.nombre_completo or usuario.usuario,
+        usuario=usuario.usuario,
+    ))
 
 
 
@@ -82,6 +119,7 @@ def crear_articulo():
         return jsonify(error=f"Ya existe un artículo con el código {codigo}."), 409
     try:
         campos_zf = campos_zona_franca(request.form)
+        campos_zf.update(campos_trazabilidad(request.form))
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -104,7 +142,8 @@ def crear_articulo():
     )
     db.session.add(articulo)
     usuario = _usuario_actual()
-    if stock > 0 and usuario is not None:
+    _auditar(usuario, "Crear artículo", articulo.codigo, f"{nombre} · stock inicial {stock} {unidad}")
+    if stock > 0:
         db.session.add(MovimientoInventario(
             empleado=usuario.nombre_completo or usuario.usuario,
             usuario=usuario.usuario,
@@ -114,6 +153,7 @@ def crear_articulo():
             tipo="Ingreso",
             cantidad=stock,
             unidad=unidad,
+            origen=ORIGEN_ALTA,
         ))
     if not Categoria.query.filter(db.func.lower(Categoria.nombre) == categoria.lower()).first():
         db.session.add(Categoria(nombre=categoria))
@@ -132,6 +172,8 @@ def crear_articulo():
 _CAMPOS_ACTUALIZABLES = (
     "nombre", "descripcion", "categoria", "ubicacion", "codigo_interno", "grupo", "tipo",
     "marca", "subpartida", "valor_fob_usd", "procedencia", "estado",
+    "serial", "responsable", "fecha_ingreso", "documento_soporte",
+    "fecha_retiro", "documento_retiro", "razon_retiro",
 )
 
 
@@ -148,7 +190,7 @@ def importar_excel():
     if not archivo.filename.lower().endswith(".xlsx"):
         return jsonify(error="El archivo debe ser un Excel .xlsx."), 400
     try:
-        filas, errores = leer_excel(archivo.stream)
+        filas, errores, avisos = leer_excel(archivo.stream)
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -178,8 +220,14 @@ def importar_excel():
 
         articulo = existentes.get(codigo)
         if articulo is not None:
-            for campo in _CAMPOS_ACTUALIZABLES:
+            cambios = [campo for campo in _CAMPOS_ACTUALIZABLES if getattr(articulo, campo) != fila[campo]]
+            for campo in cambios:
                 setattr(articulo, campo, fila[campo])
+            if cambios:
+                _auditar(
+                    usuario, "Actualizar por importación", codigo,
+                    "Campos: " + ", ".join(campo.replace("_", " ") for campo in cambios),
+                )
             actualizados += 1
         else:
             db.session.add(ArticuloInventario(
@@ -200,6 +248,7 @@ def importar_excel():
                     tipo="Ingreso",
                     cantidad=fila["stock"],
                     unidad=fila["unidad"],
+                    origen=ORIGEN_IMPORTACION,
                 ))
             creados += 1
 
@@ -207,14 +256,18 @@ def importar_excel():
             db.session.add(Categoria(nombre=fila["categoria"]))
             categorias.add(fila["categoria"].lower())
 
+    errores.sort(key=lambda e: e["fila"])
+    _auditar(
+        usuario, "Importar Excel", None,
+        f"{archivo.filename}: {creados} creados, {actualizados} actualizados, {len(errores)} filas con error",
+    )
     try:
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
         return jsonify(error="No se pudo guardar la importación. Inténtalo de nuevo."), 409
 
-    errores.sort(key=lambda e: e["fila"])
-    return jsonify(creados=creados, actualizados=actualizados, errores=errores)
+    return jsonify(creados=creados, actualizados=actualizados, errores=errores, avisos=avisos)
 
 
 @inventario_bp.get("/categorias")
@@ -274,6 +327,10 @@ def eliminar_articulo(id_articulo: int):
         return jsonify(error="El artículo no existe."), 404
 
     imagen_url = articulo.imagen_url
+    _auditar(
+        _usuario_actual(), "Eliminar artículo", articulo.codigo,
+        f"{articulo.nombre} · tenía {articulo.stock} {articulo.unidad} en stock",
+    )
     db.session.delete(articulo)
     db.session.commit()
     eliminar_imagen_subida(imagen_url, "inventory")
@@ -314,6 +371,7 @@ def retirar_articulo(id_articulo: int):
         return jsonify(error="Indica una cantidad entera mayor que cero."), 400
     try:
         sizfra = _datos_sizfra(datos)
+        observaciones = _observaciones(datos)
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -352,6 +410,8 @@ def retirar_articulo(id_articulo: int):
         tipo="Retiro",
         cantidad=cantidad,
         unidad=articulo.unidad,
+        origen=ORIGEN_MANUAL,
+        observaciones=observaciones,
         **sizfra,
     )
     db.session.add(movimiento)
@@ -382,6 +442,7 @@ def ingresar_articulo(id_articulo: int):
         return jsonify(error="Indica una cantidad entera mayor que cero."), 400
     try:
         sizfra = _datos_sizfra(datos)
+        observaciones = _observaciones(datos)
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -425,6 +486,8 @@ def ingresar_articulo(id_articulo: int):
         tipo="Ingreso",
         cantidad=cantidad,
         unidad=articulo.unidad,
+        origen=ORIGEN_MANUAL,
+        observaciones=observaciones,
         **sizfra,
     )
     db.session.add(movimiento)
@@ -544,6 +607,7 @@ def crear_salida_integrada():
             unidad=articulo.unidad,
             rol=rol,
             salida=salida,
+            origen=ORIGEN_SALIDA_INTEGRADA,
             **sizfra,
         ))
     db.session.commit()
@@ -564,3 +628,47 @@ def obtener_salida_integrada(id_salida: int):
     if salida is None:
         return jsonify(error="La salida no existe."), 404
     return jsonify(salida=salida.to_dict())
+
+
+@inventario_bp.get("/trazabilidad/<codigo>")
+def trazabilidad_articulo(codigo: str):
+    """Todo lo ocurrido con un código: movimientos de stock y acciones de auditoría.
+
+    Se busca por código (no por id) para que funcione también con artículos
+    que ya se eliminaron.
+    """
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.es_admin:
+        return jsonify(error="Solo un administrador puede ver la trazabilidad."), 403
+
+    codigo = normalizar_codigo(codigo)
+    articulo = ArticuloInventario.query.filter_by(codigo=codigo).first()
+    movimientos = MovimientoInventario.query.filter_by(codigo_articulo=codigo).all()
+    auditoria = RegistroAuditoria.query.filter_by(codigo_articulo=codigo).all()
+    if articulo is None and not movimientos and not auditoria:
+        return jsonify(error="No hay registros para ese código."), 404
+
+    eventos = [{"clase": "movimiento", **m.to_dict()} for m in movimientos]
+    eventos += [{"clase": "auditoria", **r.to_dict()} for r in auditoria]
+    # Más reciente primero; a igual hora, el orden en que se guardaron.
+    eventos.sort(key=lambda e: (e["fecha_hora"], e["clase"] == "movimiento", e["id"]), reverse=True)
+
+    datos_articulo = None
+    if articulo is not None:
+        datos_articulo = {
+            "id": articulo.id,
+            "codigo": articulo.codigo,
+            "nombre": articulo.nombre,
+            "stock": articulo.stock,
+            "unidad": articulo.unidad,
+            "serial": articulo.serial,
+            "responsable": articulo.responsable,
+            "fecha_ingreso": articulo.fecha_ingreso.isoformat() if articulo.fecha_ingreso else None,
+            "documento_soporte": articulo.documento_soporte,
+            "fecha_retiro": articulo.fecha_retiro.isoformat() if articulo.fecha_retiro else None,
+            "documento_retiro": articulo.documento_retiro,
+            "razon_retiro": articulo.razon_retiro,
+        }
+    return jsonify(codigo=codigo, articulo=datos_articulo, eventos=eventos)

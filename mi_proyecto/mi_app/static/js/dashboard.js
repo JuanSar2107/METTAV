@@ -316,16 +316,18 @@
                     throw new Error(result.error || "No se pudo importar el archivo.");
                 }
                 importDone = result.creados + result.actualizados > 0;
+                const avisos = result.avisos || [];
                 importMessage.textContent = `Importación lista: ${result.creados} creados, ${result.actualizados} actualizados`
-                    + (result.errores.length ? `, ${result.errores.length} filas con error.` : ".");
+                    + (result.errores.length ? `, ${result.errores.length} filas con error` : "")
+                    + (avisos.length ? `, ${avisos.length} avisos` : "") + ".";
                 importMessage.dataset.state = result.errores.length ? "error" : "success";
                 importMessage.hidden = false;
-                result.errores.forEach((fila) => {
+                [...result.errores, ...avisos].forEach((fila) => {
                     const item = document.createElement("li");
-                    item.textContent = `Fila ${fila.fila}${fila.codigo ? ` (${fila.codigo})` : ""}: ${fila.error}`;
+                    item.textContent = `Fila ${fila.fila}${fila.codigo ? ` (${fila.codigo})` : ""}: ${fila.error || `aviso, ${fila.aviso}`}`;
                     importErrors.append(item);
                 });
-                importErrors.hidden = result.errores.length === 0;
+                importErrors.hidden = result.errores.length + avisos.length === 0;
             } catch (error) {
                 importMessage.textContent = error.message || "No se pudo conectar con el servidor.";
                 importMessage.dataset.state = "error";
@@ -710,6 +712,9 @@
             if (value && row.dataset.zfField === "groupName") {
                 value = `${card.dataset.group} · ${value}`;
             }
+            if (value && (row.dataset.zfField === "entryDate" || row.dataset.zfField === "exitDate")) {
+                value = formatDate(value);
+            }
             row.querySelector("dd").textContent = value;
             row.hidden = !value;
         });
@@ -722,15 +727,99 @@
         message.hidden = true;
         movementOperationInput.value = "";
         movementFormInput.value = "";
+        movementNotesInput.value = "";
         dialog.showModal();
+    };
+
+    // "2026-05-08" -> "8 may 2026" (sin pasar por la zona horaria del navegador).
+    const formatDate = (isoDate) => {
+        const [year, month, day] = isoDate.split("-").map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
     };
 
     const movementOperationInput = document.querySelector("#movement-operation");
     const movementFormInput = document.querySelector("#movement-form-number");
+    const movementNotesInput = document.querySelector("#movement-notes");
     const sizfraData = () => ({
         operacion_sizfra: movementOperationInput.value.trim(),
         formulario: movementFormInput.value.trim(),
+        observaciones: movementNotesInput.value.trim(),
     });
+
+    const traceButton = document.querySelector("#open-trace");
+    const traceDialog = document.querySelector("#trace-dialog");
+    if (traceButton instanceof HTMLButtonElement && traceDialog instanceof HTMLDialogElement) {
+        const traceTitle = document.querySelector("#trace-title");
+        const traceSummary = document.querySelector("#trace-summary");
+        const traceMessage = document.querySelector("#trace-message");
+        const traceList = document.querySelector("#trace-list");
+        const traceDateFormatter = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+
+        const traceEntry = (evento) => {
+            const item = document.createElement("li");
+            const header = document.createElement("div");
+            const title = document.createElement("strong");
+            const when = document.createElement("span");
+            const detail = document.createElement("p");
+            header.className = "trace-entry-header";
+            when.textContent = `${traceDateFormatter.format(new Date(evento.fecha_hora))} · ${evento.empleado} (@${evento.usuario})`;
+            const lines = [];
+            if (evento.clase === "movimiento") {
+                item.className = evento.tipo === "Ingreso" ? "trace-entry trace-entry--entry" : "trace-entry trace-entry--withdrawal";
+                title.textContent = `${evento.tipo} de ${evento.cantidad} ${evento.unidad}`;
+                if (evento.origen) lines.push(`Origen: ${evento.origen}`);
+                if (evento.id_salida) {
+                    lines.push(evento.rol === "Principal"
+                        ? `Equipo de la salida integrada #${evento.id_salida} (${evento.proceso})`
+                        : `Integrada en ${evento.referencia} · salida #${evento.id_salida} (${evento.proceso})`);
+                }
+                const sizfra = [
+                    evento.operacion_sizfra ? `operación ${evento.operacion_sizfra}` : "",
+                    evento.formulario ? `formulario ${evento.formulario}` : "",
+                ].filter(Boolean).join(", ");
+                if (sizfra) lines.push(`Sizfra: ${sizfra}`);
+                if (evento.observaciones) lines.push(`Observaciones: ${evento.observaciones}`);
+            } else {
+                item.className = "trace-entry trace-entry--audit";
+                title.textContent = evento.accion;
+                if (evento.detalle) lines.push(evento.detalle);
+            }
+            detail.textContent = lines.join(" · ");
+            header.append(title, when);
+            item.append(header);
+            if (lines.length) item.append(detail);
+            return item;
+        };
+
+        traceButton.addEventListener("click", async () => {
+            if (!selectedCard) return;
+            traceTitle.textContent = `${selectedCard.dataset.code} · ${selectedCard.dataset.name}`;
+            traceSummary.textContent = "";
+            traceList.replaceChildren();
+            traceMessage.textContent = "Cargando trazabilidad...";
+            traceMessage.dataset.state = "success";
+            traceMessage.hidden = false;
+            traceDialog.showModal();
+            try {
+                const url = traceButton.dataset.traceUrl.replace("__CODIGO__", encodeURIComponent(selectedCard.dataset.code));
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || "No se pudo cargar la trazabilidad.");
+                }
+                traceSummary.textContent = `${result.eventos.length} registros, del más reciente al más antiguo.`;
+                traceList.append(...result.eventos.map(traceEntry));
+                traceMessage.hidden = true;
+            } catch (error) {
+                traceMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                traceMessage.dataset.state = "error";
+            }
+        });
+        document.querySelector("#close-trace").addEventListener("click", () => traceDialog.close());
+        traceDialog.addEventListener("click", (event) => {
+            if (event.target === traceDialog) traceDialog.close();
+        });
+    }
 
     const showEntryMessage = (text, state = "success") => {
         entryMessage.textContent = text;
@@ -922,7 +1011,8 @@
         const filteredMovements = movementRecords.filter((movimiento) => {
             const searchableText = normalizeMovementText(
                 `${movimiento.tipo} ${movimiento.empleado} ${movimiento.usuario} ${movimiento.articulo} ${movimiento.codigo_articulo} ${movimiento.categoria} `
-                + `${movimiento.operacion_sizfra || ""} ${movimiento.formulario || ""} ${movimiento.referencia || ""} ${movimiento.proceso || ""}`,
+                + `${movimiento.operacion_sizfra || ""} ${movimiento.formulario || ""} ${movimiento.referencia || ""} ${movimiento.proceso || ""} `
+                + `${movimiento.observaciones || ""} ${movimiento.origen || ""}`,
             );
             const movementDate = localDateKey(movimiento.fecha_hora);
             return (!query || searchableText.includes(query))
@@ -981,6 +1071,16 @@
                     : `Integrada en ${movimiento.referencia} #${movimiento.id_salida}`;
                 typeCell.append(integration);
                 row.classList.add("movement-row--integrated");
+            } else if (movimiento.origen && movimiento.origen !== "Manual") {
+                const origin = document.createElement("small");
+                origin.textContent = movimiento.origen;
+                typeCell.append(origin);
+            }
+            if (movimiento.observaciones) {
+                const notes = document.createElement("small");
+                notes.className = "movement-notes";
+                notes.textContent = movimiento.observaciones;
+                articleCell.append(notes);
             }
             const sizfraCell = document.createElement("td");
             sizfraCell.className = "movement-sizfra";

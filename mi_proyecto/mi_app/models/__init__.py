@@ -3,6 +3,7 @@ from mi_app.models.inventory import (
     Categoria,
     ConfiguracionSistema,
     MovimientoInventario,
+    RegistroAuditoria,
     SalidaIntegrada,
 )
 from mi_app.models.user import Usuario
@@ -12,6 +13,7 @@ __all__ = [
     "Categoria",
     "ConfiguracionSistema",
     "MovimientoInventario",
+    "RegistroAuditoria",
     "SalidaIntegrada",
     "Usuario",
 ]

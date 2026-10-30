@@ -157,6 +157,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             "formulario": "VARCHAR(24)",
             "id_salida": "INTEGER REFERENCES salidas_integradas (id)",
             "rol": "VARCHAR(12)",
+            "origen": "VARCHAR(20)",
+            "observaciones": "TEXT",
         }
         missing_movement_columns = {
             column_name: column_type
@@ -207,6 +209,13 @@ def create_app(test_config: dict | None = None) -> Flask:
             "valor_fob_usd": "NUMERIC(14, 2)",
             "procedencia": "VARCHAR(20)",
             "estado": "VARCHAR(40)",
+            "serial": "VARCHAR(80)",
+            "responsable": "VARCHAR(120)",
+            "fecha_ingreso": "DATE",
+            "documento_soporte": "VARCHAR(160)",
+            "fecha_retiro": "DATE",
+            "documento_retiro": "VARCHAR(160)",
+            "razon_retiro": "TEXT",
         }
         missing_article_columns = {
             column_name: column_type
