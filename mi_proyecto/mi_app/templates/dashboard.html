@@ -91,6 +91,12 @@
                     <p class="welcome-message">Bienvenido, {{ usuario.usuario }}. Consulta y administra tus artículos.</p>
                 </div>
                 <div class="inventory-heading-actions">
+                    <button class="btn-add-user" id="open-integrated-exit" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 7h10M4 12h7M4 17h10m3-8 3 3-3 3m3-3h-8" />
+                        </svg>
+                        <span>Salida integrada</span>
+                    </button>
                     {% if es_admin %}
                     <div class="admin-action-buttons">
                         <button class="btn-add-item" id="open-add-item" type="button">
@@ -98,6 +104,12 @@
                                 <path d="M12 5v14M5 12h14" />
                             </svg>
                             <span>Agregar artículo</span>
+                        </button>
+                        <button class="btn-add-user" id="open-import-items" type="button">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3v12m-5-5 5 5 5-5M4 21h16" />
+                            </svg>
+                            <span>Importar Excel</span>
                         </button>
                         <button class="btn-add-user" id="open-add-user" type="button">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -169,6 +181,14 @@
                     data-id="{{ articulo.id }}"
                     data-name="{{ articulo.nombre }}"
                     data-code="{{ articulo.codigo }}"
+                    data-internal-code="{{ articulo.codigo_interno or '' }}"
+                    data-group="{{ articulo.grupo or '' }}"
+                    data-group-name="{{ grupos_inventario.get(articulo.grupo, '') }}"
+                    data-brand="{{ articulo.marca or '' }}"
+                    data-tariff="{{ articulo.subpartida or '' }}"
+                    data-fob="{{ articulo.valor_fob_usd if articulo.valor_fob_usd is not none else '' }}"
+                    data-origin="{{ articulo.procedencia or '' }}"
+                    data-condition="{{ articulo.estado or '' }}"
                     data-category="{{ articulo.categoria }}"
                     data-description="{{ articulo.descripcion }}"
                     data-location="{{ articulo.ubicacion }}"
@@ -193,6 +213,7 @@
                     </div>
                     <div class="item-card-body">
                         <h2>{{ articulo.nombre }}</h2>
+                        <p class="item-code">{{ articulo.codigo }}</p>
                         <div class="item-card-meta">
                             <span class="stock-label{% if articulo.stock <= 5 %} is-low{% endif %}">
                                 <span class="stock-value">{{ articulo.stock }}</span>
@@ -357,7 +378,7 @@
                                 <circle cx="11" cy="11" r="7" />
                                 <path d="m20 20-4-4" />
                             </svg>
-                            <input id="movement-search" type="search" placeholder="Buscar empleado, usuario o herramienta" autocomplete="off">
+                            <input id="movement-search" type="search" placeholder="Buscar empleado, artículo, formulario o referencia" autocomplete="off">
                         </label>
                         <label class="movement-date-filter" for="movement-category-filter">
                             <span>Categoría</span>
@@ -384,6 +405,7 @@
                                     <th scope="col">Movimiento</th>
                                     <th scope="col">Herramienta / artículo</th>
                                     <th scope="col">Cantidad</th>
+                                    <th scope="col">Sizfra</th>
                                 </tr>
                             </thead>
                             <tbody id="movement-table-body"></tbody>
@@ -409,11 +431,29 @@
             <h2 id="dialog-title"></h2>
             <p class="dialog-description" id="dialog-description"></p>
             <dl class="item-details">
-                <div><dt>Código</dt><dd id="dialog-code"></dd></div>
+                <div><dt>Código ZF</dt><dd id="dialog-code"></dd></div>
                 <div><dt>Ubicación</dt><dd id="dialog-location"></dd></div>
                 <div><dt>Stock actual</dt><dd id="dialog-stock"></dd></div>
                 <div><dt>Stock máximo</dt><dd id="dialog-stock-max"></dd></div>
+                <div data-zf-field="internalCode" hidden><dt>Código interno</dt><dd></dd></div>
+                <div data-zf-field="groupName" hidden><dt>Grupo Sizfra</dt><dd></dd></div>
+                <div data-zf-field="brand" hidden><dt>Marca</dt><dd></dd></div>
+                <div data-zf-field="tariff" hidden><dt>Subpartida arancelaria</dt><dd></dd></div>
+                <div data-zf-field="fob" hidden><dt>Valor FOB</dt><dd></dd></div>
+                <div data-zf-field="origin" hidden><dt>Procedencia</dt><dd></dd></div>
+                <div data-zf-field="condition" hidden><dt>Estado</dt><dd></dd></div>
             </dl>
+            <div class="sizfra-fields" aria-label="Datos de Sizfra del movimiento">
+                <label for="movement-operation">
+                    <span>Operación Sizfra</span>
+                    <input id="movement-operation" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 420" autocomplete="off">
+                </label>
+                <label for="movement-form-number">
+                    <span>Formulario</span>
+                    <input id="movement-form-number" type="text" maxlength="24" placeholder="Ej. 1383926" autocomplete="off">
+                </label>
+                <small>Opcionales. Se guardan con el ingreso o el retiro para cruzarlo con Sizfra.</small>
+            </div>
             <form class="withdraw-form entry-form" id="entry-form">
                 <label for="entry-quantity">Unidades a ingresar</label>
                 <div class="withdraw-controls">
@@ -431,6 +471,67 @@
                 <p class="dialog-message" id="dialog-message" role="status" aria-live="polite" hidden></p>
             </form>
         </div>
+    </div>
+</dialog>
+
+<dialog class="item-dialog admin-dialog" id="integrated-exit-dialog" aria-labelledby="integrated-exit-title">
+    <button class="dialog-close" id="close-integrated-exit" type="button" aria-label="Cerrar ventana">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">INTEGRACIÓN DE PARTES</p>
+        <h2 id="integrated-exit-title">Salida integrada</h2>
+        <p class="role-note">Da de baja en un solo registro el equipo y las partes que se le integraron. Si a alguna línea le falta stock, no se descuenta nada.</p>
+        <datalist id="integrated-exit-articles">
+            {% for articulo in articulos %}
+            <option value="{{ articulo.codigo }} · {{ articulo.nombre }}"></option>
+            {% endfor %}
+        </datalist>
+        <form id="integrated-exit-form" data-exit-url="{{ url_for('inventario.crear_salida_integrada') }}">
+            <div class="admin-form-grid">
+                <p class="admin-field--full admin-form-section">Equipo (opcional)</p>
+                <div class="admin-field--full exit-line" data-line="principal">
+                    <input type="text" list="integrated-exit-articles" placeholder="Buscar por código o nombre, p. ej. ZF-MAQ-CO-001" aria-label="Equipo principal" autocomplete="off">
+                    <input type="number" min="1" step="1" value="1" aria-label="Cantidad del equipo">
+                </div>
+                <p class="admin-field--full admin-form-section">Partes integradas</p>
+                <div class="admin-field--full exit-lines" id="integrated-exit-parts"></div>
+                <div class="admin-field--full">
+                    <button class="btn-dialog-secondary" id="integrated-exit-add-part" type="button">+ Agregar parte</button>
+                </div>
+                <p class="admin-field--full admin-form-section">Datos de la salida</p>
+                <label class="admin-field" for="integrated-exit-process">
+                    <span>Proceso</span>
+                    <select id="integrated-exit-process" name="proceso" required>
+                        {% for proceso in procesos_integracion %}
+                        <option value="{{ proceso }}">{{ proceso }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="admin-field" for="integrated-exit-reference">
+                    <span>Referencia del equipo</span>
+                    <input id="integrated-exit-reference" name="referencia" type="text" maxlength="120" placeholder="Si se deja vacía, se usa el equipo">
+                </label>
+                <label class="admin-field" for="integrated-exit-operation">
+                    <span>Operación Sizfra</span>
+                    <input id="integrated-exit-operation" name="operacion_sizfra" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 420" autocomplete="off">
+                </label>
+                <label class="admin-field" for="integrated-exit-form-number">
+                    <span>Formulario</span>
+                    <input id="integrated-exit-form-number" name="formulario" type="text" maxlength="24" placeholder="Ej. 1383926" autocomplete="off">
+                </label>
+                <label class="admin-field admin-field--full" for="integrated-exit-notes">
+                    <span>Observaciones</span>
+                    <textarea id="integrated-exit-notes" name="observaciones" rows="2" maxlength="2000"></textarea>
+                </label>
+            </div>
+            <p class="dialog-message" id="integrated-exit-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="integrated-exit-button" type="submit">Registrar salida</button>
+            </div>
+        </form>
     </div>
 </dialog>
 
@@ -571,6 +672,55 @@
                     <span>Ubicación</span>
                     <input id="new-item-location" name="ubicacion" type="text" maxlength="80" placeholder="Ej. Estante A1">
                 </label>
+                <p class="admin-field--full admin-form-section">Datos de zona franca (opcionales)</p>
+                <label class="admin-field" for="new-item-code">
+                    <span>Código ZF</span>
+                    <input id="new-item-code" name="codigo" type="text" maxlength="24" placeholder="Ej. ZF-MAQ-CO-001" autocomplete="off">
+                </label>
+                <label class="admin-field" for="new-item-internal-code">
+                    <span>Código interno</span>
+                    <input id="new-item-internal-code" name="codigo_interno" type="text" maxlength="32" placeholder="Ej. MAQ-BOD-CO-001" autocomplete="off">
+                </label>
+                <label class="admin-field" for="new-item-group">
+                    <span>Grupo de inventario</span>
+                    <select id="new-item-group" name="grupo">
+                        <option value="">Sin grupo</option>
+                        {% for codigo, nombre in grupos_inventario.items() %}
+                        <option value="{{ codigo }}">{{ codigo }} · {{ nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="admin-field" for="new-item-brand">
+                    <span>Marca</span>
+                    <input id="new-item-brand" name="marca" type="text" maxlength="80">
+                </label>
+                <label class="admin-field" for="new-item-tariff">
+                    <span>Subpartida arancelaria</span>
+                    <input id="new-item-tariff" name="subpartida" type="text" maxlength="20" placeholder="Ej. 8413.30.10.00" autocomplete="off">
+                </label>
+                <label class="admin-field" for="new-item-fob">
+                    <span>Valor FOB (USD)</span>
+                    <input id="new-item-fob" name="valor_fob_usd" type="text" inputmode="decimal" maxlength="20" placeholder="Ej. 1200,00">
+                </label>
+                <label class="admin-field" for="new-item-origin">
+                    <span>Procedencia</span>
+                    <select id="new-item-origin" name="procedencia">
+                        <option value="">Sin indicar</option>
+                        <option value="Nacional">Nacional</option>
+                        <option value="Extranjera">Extranjera</option>
+                    </select>
+                </label>
+                <label class="admin-field" for="new-item-condition">
+                    <span>Estado de la mercancía</span>
+                    <input id="new-item-condition" name="estado" type="text" maxlength="40" list="new-item-condition-options" placeholder="Ej. Para reparación">
+                    <datalist id="new-item-condition-options">
+                        <option value="Nuevo"></option>
+                        <option value="Usado"></option>
+                        <option value="Para reparación"></option>
+                        <option value="Con avería"></option>
+                        <option value="Para fabricación"></option>
+                    </datalist>
+                </label>
                 <label class="admin-field admin-field--full" for="new-item-image">
                     <span>Imagen del artículo</span>
                     <input id="new-item-image" name="imagen" type="file" accept="image/jpeg,image/png,image/webp" required>
@@ -584,6 +734,33 @@
             <p class="dialog-message" id="create-item-message" role="status" aria-live="polite" hidden></p>
             <div class="admin-form-actions">
                 <button class="withdraw-button" id="create-item-button" type="submit">Guardar artículo</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog class="item-dialog admin-dialog" id="import-items-dialog" aria-labelledby="import-items-title">
+    <button class="dialog-close" id="close-import-items" type="button" aria-label="Cerrar ventana">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">GESTIÓN DE BODEGA</p>
+        <h2 id="import-items-title">Importar inventario desde Excel</h2>
+        <form id="import-items-form" data-import-url="{{ url_for('inventario.importar_excel') }}" enctype="multipart/form-data">
+            <div class="admin-form-grid">
+                <label class="admin-field admin-field--full" for="import-items-file">
+                    <span>Archivo Excel (.xlsx)</span>
+                    <input id="import-items-file" name="archivo" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                    <small>Columnas que reconoce: Código interno, Código ZF, Categoría, Ubicación, Tipo, Consecutivo, Descripción y Marca. Opcionales: Grupo, Subpartida, Valor FOB, Procedencia, Estado, Cantidad y Unidad.</small>
+                </label>
+            </div>
+            <p class="role-note">Los artículos se identifican por el código ZF. Si un código ya existe se actualizan sus datos, pero no su stock.</p>
+            <p class="dialog-message" id="import-items-message" role="status" aria-live="polite" hidden></p>
+            <ul class="import-errors" id="import-items-errors" hidden></ul>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="import-items-button" type="submit">Importar</button>
             </div>
         </form>
     </div>

@@ -1287,6 +1287,112 @@ body {
     line-height: 1.45;
 }
 
+.admin-form-section {
+    margin: 6px 0 -4px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(39, 71, 101, 0.14);
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.import-errors {
+    max-height: 160px;
+    margin: 10px 0 0;
+    padding: 10px 10px 10px 28px;
+    overflow-y: auto;
+    border-radius: 7px;
+    background: rgba(201, 95, 80, 0.08);
+    color: #8a3a2e;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.sizfra-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    margin: 0 0 16px;
+}
+
+.sizfra-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--label);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sizfra-fields input,
+.exit-line input {
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 10px;
+    border: 1px solid rgba(39, 71, 101, 0.24);
+    border-radius: 6px;
+    background: #fff;
+    color: #194065;
+    font: 500 14px 'Barlow', sans-serif;
+}
+
+.sizfra-fields small {
+    grid-column: 1 / -1;
+    color: #6a8092;
+    font-size: 11px;
+}
+
+.exit-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.exit-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 80px auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.exit-line[data-line="principal"] {
+    grid-template-columns: minmax(0, 1fr) 80px;
+}
+
+.exit-line-remove {
+    min-height: 38px;
+    padding: 0 10px;
+    border: 1px solid rgba(201, 95, 80, 0.35);
+    border-radius: 6px;
+    background: transparent;
+    color: #8a3a2e;
+    font: 600 13px 'Barlow', sans-serif;
+    cursor: pointer;
+}
+
+.exit-line-remove:hover {
+    background: rgba(201, 95, 80, 0.08);
+}
+
+.movement-sizfra {
+    color: #526b80;
+    white-space: nowrap;
+}
+
+.movement-row--integrated td:first-child {
+    box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.item-code {
+    margin: -8px 0 12px;
+    color: #6a8092;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
 .action-toast {
     position: fixed;
     z-index: 20;

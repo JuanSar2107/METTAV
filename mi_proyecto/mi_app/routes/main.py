@@ -3,6 +3,7 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, se
 from mi_app.extensions import db
 from mi_app.security import usuario_actual
 from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
+from mi_app.models.inventory import GRUPOS_INVENTARIO, PROCESOS_INTEGRACION
 
 main_bp = Blueprint('main', __name__)
 
@@ -19,8 +20,11 @@ _DESCRIPCIONES_RUTAS = {
     "usuarios.actualizar_usuario_actual": "Actualiza el nombre de usuario o la contraseña propios.",
     "usuarios.eliminar_usuario_actual": "Elimina la cuenta autenticada y cierra su sesión.",
     "inventario.crear_articulo": "Crea un artículo del inventario; requiere sesión de administrador.",
+    "inventario.importar_excel": "Crea o actualiza artículos desde el Excel de inventario (por código ZF); requiere sesión de administrador.",
     "inventario.eliminar_articulo": "Elimina un artículo; requiere sesión de administrador.",
     "inventario.retirar_articulo": "Retira unidades del stock de un artículo autenticado.",
+    "inventario.crear_salida_integrada": "Da de baja en un solo registro un equipo y las partes que se le integraron; requiere sesión.",
+    "inventario.obtener_salida_integrada": "Devuelve una salida integrada con el equipo y sus partes; requiere sesión.",
     "inventario.listar_movimientos": "Lista los retiros de inventario; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
     "inventario.crear_categoria": "Crea una nueva categoría; requiere sesión de administrador.",
@@ -129,6 +133,8 @@ def dashboard():
         usuario=usuario,
         articulos=articulos,
         categorias=categorias,
+        grupos_inventario=GRUPOS_INVENTARIO,
+        procesos_integracion=PROCESOS_INTEGRACION,
         usuarios_registrados=usuarios_registrados,
         es_admin=usuario.es_admin,
     )

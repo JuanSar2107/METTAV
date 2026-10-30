@@ -2,12 +2,74 @@ from datetime import datetime, timezone
 
 from mi_app.extensions import db
 
+# Grupos de inventario tal como están creados en Sizfra (zona franca).
+GRUPOS_INVENTARIO = {
+    "001": "Activos oficina METTAV",
+    "002": "Equipos de bodega",
+    "003": "Equipos operativos bodega",
+    "004": "Mercancía que ingresa para la prestación de un servicio",
+}
+
+PROCEDENCIAS = ("Nacional", "Extranjera")
+
+# Para qué se integran las partes en una salida integrada.
+PROCESOS_INTEGRACION = ("Fabricación", "Reparación", "Mantenimiento", "Overhaul", "Otro")
+
+
+class SalidaIntegrada(db.Model):
+    """Una salida en la que a un equipo se le integraron partes del inventario.
+
+    Cada artículo que sale (el equipo principal y cada parte) queda como un
+    MovimientoInventario de tipo "Retiro" ligado a esta salida.
+    """
+
+    __tablename__ = "salidas_integradas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    proceso = db.Column(db.String(20), nullable=False)
+    # Equipo al que se integraron las partes (p. ej. "Banco ref. SER-2026-09-29").
+    referencia = db.Column(db.String(120), nullable=False)
+    observaciones = db.Column(db.Text)
+    operacion_sizfra = db.Column(db.String(6))
+    formulario = db.Column(db.String(24))
+    empleado = db.Column(db.String(120), nullable=False)
+    usuario = db.Column(db.String(80), nullable=False)
+    fecha_hora = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    movimientos = db.relationship("MovimientoInventario", back_populates="salida", order_by="MovimientoInventario.id")
+
+    def to_dict(self):
+        fecha_hora = self.fecha_hora.replace(tzinfo=timezone.utc)
+        return {
+            "id": self.id,
+            "proceso": self.proceso,
+            "referencia": self.referencia,
+            "observaciones": self.observaciones,
+            "operacion_sizfra": self.operacion_sizfra,
+            "formulario": self.formulario,
+            "empleado": self.empleado,
+            "usuario": self.usuario,
+            "fecha_hora": fecha_hora.isoformat(timespec="seconds"),
+            "movimientos": [movimiento.to_dict() for movimiento in self.movimientos],
+        }
+
 
 class ArticuloInventario(db.Model):
     __tablename__ = "articulos_inventario"
 
     id = db.Column(db.Integer, primary_key=True)
+    # Código ZF: el que se registra en Sizfra y el que se da de baja (p. ej. ZF-MAQ-CO-001).
     codigo = db.Column(db.String(24), unique=True, nullable=False)
+    # Código interno de METTAV (p. ej. MAQ-BOD-CO-001).
+    codigo_interno = db.Column(db.String(32))
+    grupo = db.Column(db.String(3))
+    tipo = db.Column(db.String(8))
+    marca = db.Column(db.String(80))
+    subpartida = db.Column(db.String(20))
+    valor_fob_usd = db.Column(db.Numeric(14, 2))
+    procedencia = db.Column(db.String(20))
+    estado = db.Column(db.String(40))
     nombre = db.Column(db.String(120), nullable=False)
     categoria = db.Column(db.String(60), nullable=False)
     descripcion = db.Column(db.Text, nullable=False)
@@ -35,6 +97,13 @@ class MovimientoInventario(db.Model):
     fecha_hora = db.Column(
         db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
+    # Operación y formulario de Sizfra con los que se registró el movimiento.
+    operacion_sizfra = db.Column(db.String(6))
+    formulario = db.Column(db.String(24))
+    # Solo en salidas integradas: a cuál pertenece y si es el equipo o una parte.
+    id_salida = db.Column(db.Integer, db.ForeignKey("salidas_integradas.id"))
+    rol = db.Column(db.String(12))
+    salida = db.relationship("SalidaIntegrada", back_populates="movimientos")
 
     def to_dict(self):
         fecha_hora = self.fecha_hora
@@ -51,6 +120,12 @@ class MovimientoInventario(db.Model):
             "cantidad": self.cantidad,
             "unidad": self.unidad,
             "fecha_hora": fecha_hora.isoformat(timespec="seconds"),
+            "operacion_sizfra": self.operacion_sizfra,
+            "formulario": self.formulario,
+            "id_salida": self.id_salida,
+            "rol": self.rol,
+            "proceso": self.salida.proceso if self.salida else None,
+            "referencia": self.salida.referencia if self.salida else None,
         }
 
 
