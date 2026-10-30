@@ -113,14 +113,17 @@ def test_crear_articulo_imagen_invalida_400(client, creador_usuarios, iniciar_se
     assert respuesta.status_code == 400
 
 
-def test_crear_articulo_sin_imagen_400(client, creador_usuarios, iniciar_sesion):
+def test_crear_articulo_sin_imagen_usa_la_imagen_por_defecto(client, app, creador_usuarios, iniciar_sesion):
     creador_usuarios("admin", es_admin=True)
     iniciar_sesion("admin")
     respuesta = client.post(
         "/api/inventario/",
         data={"nombre": "Martillo", "descripcion": "Martillo.", "stock": "1"},
     )
-    assert respuesta.status_code == 400
+    assert respuesta.status_code == 201
+    with app.app_context():
+        guardado = db.session.get(ArticuloInventario, respuesta.get_json()["articulo"]["id"])
+        assert guardado.imagen_url == "/static/images/workshop-bg.jpg"
 
 
 def test_crear_articulo_stock_invalido_400(client, creador_usuarios, iniciar_sesion, imagen_png):
@@ -182,21 +185,23 @@ def test_ingresar_articulo(client, app, crear_articulo, creador_usuarios, inicia
         assert movimiento.usuario == "ana"
 
 
-def test_ingreso_no_supera_stock_maximo(client, crear_articulo, creador_usuarios, iniciar_sesion):
+def test_ingreso_sin_tope_actualiza_el_stock_mas_alto(client, crear_articulo, creador_usuarios, iniciar_sesion):
+    """Materia prima y consumibles rotan: se puede reabastecer por encima del stock inicial."""
     id_articulo = crear_articulo(codigo="ART-LIMITE", stock=10)
     creador_usuarios("ana")
     iniciar_sesion("ana")
 
     assert client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 4}).status_code == 200
     respuesta = client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 4})
-    assert respuesta.status_code == 200
-    assert respuesta.get_json()["articulo"]["stock"] == 10
+    assert respuesta.get_json()["articulo"] == {"id": id_articulo, "stock": 10, "stock_maximo": 10, "unidad": "unidades"}
 
-    excedente = client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 1})
-    assert excedente.status_code == 409
-    assert excedente.get_json()["stock"] == 10
-    assert excedente.get_json()["stock_maximo"] == 10
-    assert excedente.get_json()["disponible"] == 0
+    mas = client.post(f"/api/inventario/{id_articulo}/ingresar", json={"cantidad": 15})
+    assert mas.status_code == 200
+    assert mas.get_json()["articulo"]["stock"] == 25
+    assert mas.get_json()["articulo"]["stock_maximo"] == 25
+    # Después de retirar, el stock más alto se conserva.
+    retiro = client.post(f"/api/inventario/{id_articulo}/retirar", json={"cantidad": 20})
+    assert retiro.get_json()["articulo"]["stock_maximo"] == 25
 
 
 def test_retiro_no_supera_stock_maximo(client, app, crear_articulo, creador_usuarios, iniciar_sesion):

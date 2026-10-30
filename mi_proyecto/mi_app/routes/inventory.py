@@ -163,10 +163,16 @@ def crear_articulo():
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
-    try:
-        imagen_url, ruta_imagen = guardar_imagen(request.files.get("imagen"), "inventory")
-    except ValueError as error:
-        return jsonify(error=str(error)), 400
+    # La imagen es opcional: sin ella se usa la misma imagen por defecto que en la importación.
+    imagen = request.files.get("imagen")
+    ruta_imagen = None
+    if imagen is not None and imagen.filename:
+        try:
+            imagen_url, ruta_imagen = guardar_imagen(imagen, "inventory")
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+    else:
+        imagen_url = url_for("static", filename="images/workshop-bg.jpg")
 
     articulo = ArticuloInventario(
         codigo=codigo or f"ADM-{uuid4().hex[:10].upper()}",
@@ -201,7 +207,8 @@ def crear_articulo():
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        ruta_imagen.unlink(missing_ok=True)
+        if ruta_imagen is not None:
+            ruta_imagen.unlink(missing_ok=True)
         return jsonify(error="No se pudo guardar el artículo. Inténtalo de nuevo."), 409
 
     return jsonify(articulo={"id": articulo.id, "nombre": articulo.nombre}), 201
@@ -521,32 +528,25 @@ def ingresar_articulo(id_articulo: int):
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 
+    # Los ingresos no tienen tope (materia prima y consumibles rotan
+    # constantemente); stock_maximo solo guarda el stock más alto alcanzado.
     resultado = db.session.execute(
         update(ArticuloInventario)
-        .where(
-            ArticuloInventario.id == id_articulo,
-            (ArticuloInventario.stock_maximo == 0)
-            | (ArticuloInventario.stock + cantidad <= ArticuloInventario.stock_maximo),
-        )
+        .where(ArticuloInventario.id == id_articulo)
         .values(
             stock=ArticuloInventario.stock + cantidad,
             stock_maximo=case(
-                (ArticuloInventario.stock_maximo == 0, ArticuloInventario.stock + cantidad),
+                (
+                    ArticuloInventario.stock + cantidad > ArticuloInventario.stock_maximo,
+                    ArticuloInventario.stock + cantidad,
+                ),
                 else_=ArticuloInventario.stock_maximo,
             ),
         )
     )
     if resultado.rowcount == 0:
         db.session.rollback()
-        articulo = db.session.get(ArticuloInventario, id_articulo)
-        if articulo is None:
-            return jsonify(error="El artículo no existe."), 404
-        return jsonify(
-            error="El ingreso supera el límite de stock del artículo.",
-            stock=articulo.stock,
-            stock_maximo=articulo.stock_maximo,
-            disponible=max(0, articulo.stock_maximo - articulo.stock),
-        ), 409
+        return jsonify(error="El artículo no existe."), 404
 
     movimiento = MovimientoInventario(
         empleado=usuario.nombre_completo or usuario.usuario,

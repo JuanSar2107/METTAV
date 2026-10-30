@@ -771,14 +771,13 @@
     const updateStockLimits = (card) => {
         const stock = Number(card.dataset.stock);
         const maxStock = Number(card.dataset.maxStock);
-        const entryAvailable = maxStock > 0 ? Math.max(0, maxStock - stock) : null;
+        // El stock máximo es informativo (el más alto alcanzado); los ingresos no tienen tope.
         detailStockMax.textContent = maxStock > 0
             ? `${maxStock} ${card.dataset.unit}`
             : "Se define con el primer ingreso";
-        quantityInput.max = String(Math.min(stock, maxStock || stock));
-        entryQuantityInput.max = entryAvailable === null ? "" : String(entryAvailable);
-        entryQuantityInput.disabled = entryAvailable === 0;
-        entryButton.disabled = entryAvailable === 0;
+        quantityInput.max = String(stock);
+        entryQuantityInput.disabled = false;
+        entryButton.disabled = false;
     };
 
     const showMessage = (text, state = "success") => {
@@ -1000,16 +999,8 @@
             }
 
             const quantity = Number(entryQuantityInput.value);
-            const maxStock = Number(selectedCard.dataset.maxStock);
-            const currentStock = Number(selectedCard.dataset.stock);
-            const available = maxStock > 0 ? maxStock - currentStock : Infinity;
-            if (!Number.isInteger(quantity) || quantity < 1 || quantity > available) {
-                showEntryMessage(
-                    maxStock > 0
-                        ? `Puedes ingresar hasta ${Math.max(0, available)} ${selectedCard.dataset.unit}.`
-                        : "Indica una cantidad entera mayor que cero.",
-                    "error",
-                );
+            if (!Number.isInteger(quantity) || quantity < 1) {
+                showEntryMessage("Indica una cantidad entera mayor que cero.", "error");
                 return;
             }
 
@@ -1044,8 +1035,7 @@
             } catch (error) {
                 showEntryMessage(error.message || "No se pudo conectar con el servidor.", "error");
             } finally {
-                const maxStock = Number(selectedCard.dataset.maxStock);
-                entryButton.disabled = maxStock > 0 && Number(selectedCard.dataset.stock) >= maxStock;
+                entryButton.disabled = false;
             }
         });
     }
