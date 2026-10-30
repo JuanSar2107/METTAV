@@ -174,6 +174,97 @@ def codigo_valido(codigo: str) -> bool:
     return bool(codigo) and len(codigo) <= 24 and bool(_RE_CODIGO.match(codigo))
 
 
+# --- Conciliación con Sizfra -------------------------------------------------
+
+# Nombres posibles de las columnas en un reporte exportado de Sizfra.
+_ENCABEZADOS_CODIGO_SIZFRA = (
+    "codigo zf", "codigo de inventario", "codigo inventario", "codigo producto", "codigo", "producto",
+)
+_ENCABEZADOS_SALDO_SIZFRA = (
+    "saldo final", "saldo actual", "saldo", "existencia", "existencias", "cantidad", "cant",
+)
+
+
+def _leer_cantidad(texto: str) -> Decimal:
+    """'2,000000' (como lo muestra Sizfra), '1.200' o '15' -> Decimal."""
+    texto = texto.replace(" ", "")
+    if "," in texto and "." in texto:
+        if texto.rfind(",") > texto.rfind("."):
+            texto = texto.replace(".", "").replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+    elif "," in texto:
+        texto = texto.replace(",", ".")
+    elif _RE_MILES.match(texto):
+        texto = texto.replace(".", "")
+    return Decimal(texto)
+
+
+def _filas_de_archivo(archivo, nombre: str):
+    """Filas (tuplas) de un .xlsx o .csv, para leerlas igual."""
+    if nombre.lower().endswith(".csv"):
+        import csv
+
+        contenido = archivo.read()
+        for codificacion in ("utf-8-sig", "latin-1"):
+            try:
+                texto = contenido.decode(codificacion)
+                break
+            except UnicodeDecodeError:
+                continue
+        delimitador = ";" if texto.count(";") > texto.count(",") else ","
+        return [tuple(fila) for fila in csv.reader(texto.splitlines(), delimiter=delimitador)]
+    if nombre.lower().endswith(".xlsx"):
+        from openpyxl import load_workbook
+
+        try:
+            libro = load_workbook(archivo, read_only=True, data_only=True)
+        except Exception:
+            raise ValueError("El archivo no es un Excel (.xlsx) válido.")
+        filas = list(libro.worksheets[0].iter_rows(values_only=True))
+        libro.close()
+        return filas
+    raise ValueError("El reporte de Sizfra debe ser un archivo .xlsx o .csv.")
+
+
+def leer_saldos_sizfra(archivo, nombre: str) -> tuple[dict[str, Decimal], dict[str, str]]:
+    """Devuelve ({código: saldo}, {columna usada: encabezado}) de un reporte de Sizfra.
+
+    Busca en las primeras 20 filas una con columna de código y de saldo. Si un
+    código aparece varias veces (p. ej. un renglón por formulario) se suman.
+    """
+    filas = _filas_de_archivo(archivo, nombre)
+    for numero, fila in enumerate(filas[:20]):
+        claves = [_clave(celda) for celda in fila]
+        indice_codigo = next((claves.index(o) for o in _ENCABEZADOS_CODIGO_SIZFRA if o in claves), None)
+        indice_saldo = next((claves.index(o) for o in _ENCABEZADOS_SALDO_SIZFRA if o in claves), None)
+        if indice_codigo is not None and indice_saldo is not None:
+            break
+    else:
+        raise ValueError(
+            "No se encontraron las columnas de código y saldo. El archivo debe tener una columna "
+            "'Código' (o 'Código ZF') y otra 'Saldo' (o 'Cantidad')."
+        )
+
+    saldos: dict[str, Decimal] = {}
+    for fila in filas[numero + 1:]:
+        if max(indice_codigo, indice_saldo) >= len(fila):
+            continue
+        codigo = normalizar_codigo(fila[indice_codigo])
+        texto_saldo = _texto(fila[indice_saldo])
+        if not codigo or not texto_saldo or codigo in ("TOTAL", "SUBTOTAL", "TOTALES", "TOTAL GENERAL"):
+            continue
+        try:
+            saldo = _leer_cantidad(texto_saldo)
+        except InvalidOperation:
+            continue  # totales, subtítulos u otras filas que no son de un código
+        saldos[codigo] = saldos.get(codigo, Decimal("0")) + saldo
+    if not saldos:
+        raise ValueError("El archivo no tiene filas con código y saldo.")
+    columnas = {"codigo": _texto(filas[numero][indice_codigo]), "saldo": _texto(filas[numero][indice_saldo])}
+    return saldos, columnas
+
+
 # --- Importación desde Excel -------------------------------------------------
 
 def _clave(encabezado) -> str:

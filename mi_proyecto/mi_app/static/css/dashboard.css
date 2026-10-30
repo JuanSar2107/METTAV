@@ -1398,6 +1398,113 @@ body {
     line-height: 1.45;
 }
 
+.report-forms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.report-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid rgba(39, 71, 101, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+}
+
+.report-card h3 {
+    margin: 0;
+    color: #194065;
+    font-size: 17px;
+}
+
+.report-card label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    color: var(--label);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.report-card input:not([type="checkbox"]),
+.report-card select {
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 10px;
+    border: 1px solid rgba(39, 71, 101, 0.24);
+    border-radius: 6px;
+    background: #fff;
+    color: #194065;
+    font: 500 14px 'Barlow', sans-serif;
+}
+
+.report-card input[type="file"] {
+    padding: 7px 8px;
+}
+
+.report-card .report-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.report-dates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.report-note {
+    margin: 0;
+    color: #6a8092;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.report-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.report-actions > button {
+    flex: 1 1 auto;
+    min-height: 40px;
+}
+
+.report-summary {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    background: rgba(237, 244, 248, 0.9);
+    color: #274765;
+    font-size: 13px;
+}
+
+.report-summary p {
+    margin: 2px 0;
+}
+
+.report-summary[hidden] {
+    display: none;
+}
+
+.report-table tr.report-row--diferencia td {
+    background: rgba(201, 95, 80, 0.08);
+}
+
+.report-table tr.report-row--solo-en-sizfra td,
+.report-table tr.report-row--solo-en-la-app td {
+    background: rgba(214, 160, 40, 0.1);
+}
+
 .movement-table td small.movement-notes {
     font-style: italic;
 }

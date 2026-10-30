@@ -1151,6 +1151,183 @@
         });
     }
 
+    // ==========================================
+    // Reportes y conciliación con Sizfra
+    // ==========================================
+    const reportMessage = document.querySelector("#report-message");
+    const reportSummary = document.querySelector("#report-summary");
+    const reportTableWrap = document.querySelector("#report-table-wrap");
+    const reportTableHead = document.querySelector("#report-table-head");
+    const reportTableBody = document.querySelector("#report-table-body");
+    const reportDate = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+    const usd = (value) => (value === null || value === undefined
+        ? ""
+        : `USD ${Number(value).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+    // Columnas de cada reporte: [encabezado, función que saca el valor de la fila].
+    const reportColumns = {
+        inventario: [
+            ["Código ZF", (f) => f.codigo],
+            ["Descripción", (f) => f.nombre],
+            ["Grupo", (f) => f.grupo || "—"],
+            ["Ubicación", (f) => f.ubicacion],
+            ["Stock", (f) => `${f.stock} ${f.unidad}`],
+            ["Subpartida", (f) => f.subpartida || ""],
+            ["Valor total", (f) => usd(f.valor_total_usd)],
+        ],
+        movimientos: [
+            ["Fecha", (f) => reportDate.format(new Date(f.fecha_hora))],
+            ["Tipo", (f) => f.tipo],
+            ["Código", (f) => f.codigo_articulo],
+            ["Artículo", (f) => f.articulo],
+            ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
+            ["Sizfra", (f) => [f.operacion_sizfra && `Op. ${f.operacion_sizfra}`, f.formulario && `Form. ${f.formulario}`].filter(Boolean).join(" · ")],
+            ["Empleado", (f) => f.empleado],
+        ],
+        salidas: [
+            ["Salida", (f) => `#${f.salida}`],
+            ["Fecha", (f) => reportDate.format(new Date(f.fecha_hora))],
+            ["Proceso", (f) => f.proceso],
+            ["Referencia", (f) => f.referencia],
+            ["Rol", (f) => (f.rol === "Principal" ? "Equipo" : "Parte")],
+            ["Artículo", (f) => `${f.codigo_articulo} · ${f.articulo}`],
+            ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
+        ],
+        conciliacion: [
+            ["Estado", (f) => f.estado],
+            ["Código", (f) => f.codigo],
+            ["Artículo", (f) => f.nombre || "—"],
+            ["Stock app", (f) => (f.stock_app ?? "—")],
+            ["Saldo Sizfra", (f) => (f.saldo_sizfra ?? "—")],
+            ["Diferencia", (f) => (f.diferencia ?? "—")],
+        ],
+    };
+
+    const reportSummaryText = (report, result) => {
+        if (report === "inventario") {
+            return result.resumen.map((g) => `${g.grupo} · ${g.nombre}: ${g.articulos} artículos, ${g.unidades} unidades${g.valor_total_usd ? `, ${usd(g.valor_total_usd)}` : ""}`);
+        }
+        if (report === "movimientos") {
+            const r = result.resumen;
+            return [`${r.ingresos} ingresos (${r.unidades_ingresadas} unidades) y ${r.retiros} retiros (${r.unidades_retiradas} unidades).`];
+        }
+        if (report === "salidas") {
+            return [`${result.total} salidas integradas.`];
+        }
+        const r = result.resumen;
+        return [
+            `Columnas usadas del archivo: código "${result.columnas.codigo}", saldo "${result.columnas.saldo}".`,
+            `${r.Coincide} coinciden, ${r.Diferencia} con diferencia, ${r["Solo en Sizfra"]} solo en Sizfra y ${r["Solo en la app"]} solo en la app.`,
+        ];
+    };
+
+    const reportRows = (report, result) => {
+        if (report === "salidas") {
+            return result.salidas.flatMap((s) => s.movimientos.map((m) => ({ ...m, salida: s.id, proceso: s.proceso, referencia: s.referencia })));
+        }
+        return result.filas;
+    };
+
+    const showReportMessage = (text, state) => {
+        reportMessage.textContent = text;
+        reportMessage.dataset.state = state || "";
+        reportMessage.hidden = false;
+    };
+
+    const reportQuery = (form) => {
+        const params = new URLSearchParams();
+        new FormData(form).forEach((value, key) => {
+            if (typeof value === "string" && value.trim()) params.set(key, value.trim());
+        });
+        return params;
+    };
+
+    const fetchReport = (form, excel) => {
+        const report = form.dataset.report;
+        if (report === "conciliacion") {
+            const body = new FormData(form);
+            body.set("solo_zf", form.elements.solo_zf.checked ? "1" : "0");
+            if (excel) body.set("formato", "xlsx");
+            return fetch(form.dataset.reportUrl, { method: "POST", body });
+        }
+        const params = reportQuery(form);
+        if (excel) params.set("formato", "xlsx");
+        return fetch(`${form.dataset.reportUrl}?${params}`);
+    };
+
+    document.querySelectorAll(".report-card").forEach((form) => {
+        const report = form.dataset.report;
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            showReportMessage("Cargando reporte...");
+            reportSummary.hidden = true;
+            reportTableWrap.hidden = true;
+            try {
+                const response = await fetchReport(form, false);
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo generar el reporte.");
+
+                const rows = reportRows(report, result);
+                const columns = reportColumns[report];
+                reportSummary.replaceChildren(...reportSummaryText(report, result).map((line) => {
+                    const p = document.createElement("p");
+                    p.textContent = line;
+                    return p;
+                }));
+                reportSummary.hidden = false;
+                if (!rows.length) {
+                    showReportMessage("No hay registros con esos filtros.");
+                    return;
+                }
+                const headRow = document.createElement("tr");
+                headRow.append(...columns.map(([title]) => {
+                    const th = document.createElement("th");
+                    th.scope = "col";
+                    th.textContent = title;
+                    return th;
+                }));
+                reportTableHead.replaceChildren(headRow);
+                reportTableBody.replaceChildren(...rows.map((row) => {
+                    const tr = document.createElement("tr");
+                    if (report === "conciliacion") {
+                        tr.className = `report-row--${row.estado.toLowerCase().replace(/\s+/g, "-")}`;
+                    }
+                    tr.append(...columns.map(([, value]) => {
+                        const td = document.createElement("td");
+                        td.textContent = value(row);
+                        return td;
+                    }));
+                    return tr;
+                }));
+                reportMessage.hidden = true;
+                reportTableWrap.hidden = false;
+            } catch (error) {
+                showReportMessage(error.message || "No se pudo conectar con el servidor.", "error");
+            }
+        });
+
+        form.querySelector("[data-download]").addEventListener("click", async () => {
+            if (!form.reportValidity()) return;
+            try {
+                const response = await fetchReport(form, true);
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || "No se pudo descargar el reporte.");
+                }
+                const disposition = response.headers.get("Content-Disposition") || "";
+                const match = disposition.match(/filename="?([^";]+)"?/);
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(await response.blob());
+                link.download = match ? match[1] : "reporte.xlsx";
+                link.click();
+                URL.revokeObjectURL(link.href);
+            } catch (error) {
+                showReportMessage(error.message || "No se pudo conectar con el servidor.", "error");
+            }
+        });
+    });
+
     tabButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
             const targetId = btn.dataset.target;
@@ -1158,6 +1335,7 @@
             const tabHashes = {
                 "section-users": "#usuarios",
                 "section-movements": "#movimientos",
+                "section-reports": "#reportes",
                 "section-inventory": "#inventario",
             };
             window.location.hash = tabHashes[targetId] || "#inventario";
@@ -1168,6 +1346,7 @@
     const initialTabs = {
         "#usuarios": "section-users",
         "#movimientos": "section-movements",
+        "#reportes": "section-reports",
     };
     const initialTab = initialTabs[window.location.hash];
     if (initialTab) {

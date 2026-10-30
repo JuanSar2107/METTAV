@@ -101,9 +101,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .routes.inventory import inventario_bp
     from .routes.users import usuarios_bp
     from .routes.assistant import asistente_bp
+    from .routes.reports import reportes_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(inventario_bp)
+    app.register_blueprint(reportes_bp)
     app.register_blueprint(usuarios_bp)
     app.register_blueprint(asistente_bp)
 

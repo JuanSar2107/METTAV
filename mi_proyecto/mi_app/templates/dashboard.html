@@ -80,6 +80,12 @@
                     </svg>
                     <span>Historial</span>
                 </button>
+                <button type="button" class="tab-button" id="tab-btn-reports" data-target="section-reports">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 20V10m6 10V4m6 16v-7m4 7H2" />
+                    </svg>
+                    <span>Reportes</span>
+                </button>
             </nav>
             {% endif %}
 
@@ -418,6 +424,94 @@
                             <tbody id="movement-table-body"></tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <div id="section-reports" class="dashboard-tab-panel is-hidden">
+                <div class="inventory-heading">
+                    <div>
+                        <p class="eyebrow">AUDITORÍA DE ZONA FRANCA</p>
+                        <h2 class="section-heading-title">Reportes</h2>
+                        <p class="welcome-message">Consulta o descarga en Excel el inventario y los movimientos, y concilia contra Sizfra.</p>
+                    </div>
+                </div>
+                <div class="report-forms">
+                    <form class="report-card" data-report="inventario" data-report-url="{{ url_for('reportes.reporte_inventario') }}">
+                        <h3>Inventario actual</h3>
+                        <label><span>Grupo de Sizfra</span>
+                            <select name="grupo">
+                                <option value="">Todos</option>
+                                {% for codigo, nombre in grupos_inventario.items() %}
+                                <option value="{{ codigo }}">{{ codigo }} · {{ nombre }}</option>
+                                {% endfor %}
+                                <option value="sin-grupo">Sin grupo</option>
+                            </select>
+                        </label>
+                        <label><span>Categoría</span>
+                            <select name="categoria">
+                                <option value="">Todas</option>
+                                {% for cat in categorias %}
+                                <option value="{{ cat.nombre }}">{{ cat.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label><span>Código o nombre</span><input name="q" type="search" autocomplete="off"></label>
+                        <div class="report-actions">
+                            <button class="withdraw-button" type="submit">Ver</button>
+                            <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
+                        </div>
+                    </form>
+                    <form class="report-card" data-report="movimientos" data-report-url="{{ url_for('reportes.reporte_movimientos') }}">
+                        <h3>Movimientos</h3>
+                        <div class="report-dates">
+                            <label><span>Desde</span><input name="desde" type="date"></label>
+                            <label><span>Hasta</span><input name="hasta" type="date"></label>
+                        </div>
+                        <label><span>Tipo</span>
+                            <select name="tipo">
+                                <option value="">Ingresos y retiros</option>
+                                <option value="Ingreso">Solo ingresos</option>
+                                <option value="Retiro">Solo retiros</option>
+                            </select>
+                        </label>
+                        <label><span>Código</span><input name="codigo" type="search" placeholder="Ej. ZF-MAQ-CO-001" autocomplete="off"></label>
+                        <div class="report-actions">
+                            <button class="withdraw-button" type="submit">Ver</button>
+                            <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
+                        </div>
+                    </form>
+                    <form class="report-card" data-report="salidas" data-report-url="{{ url_for('reportes.reporte_salidas_integradas') }}">
+                        <h3>Salidas integradas</h3>
+                        <div class="report-dates">
+                            <label><span>Desde</span><input name="desde" type="date"></label>
+                            <label><span>Hasta</span><input name="hasta" type="date"></label>
+                        </div>
+                        <p class="report-note">Qué partes se integraron a cada equipo, cuándo y con qué formulario.</p>
+                        <div class="report-actions">
+                            <button class="withdraw-button" type="submit">Ver</button>
+                            <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
+                        </div>
+                    </form>
+                    <form class="report-card" data-report="conciliacion" data-report-url="{{ url_for('reportes.conciliacion') }}" enctype="multipart/form-data">
+                        <h3>Conciliación con Sizfra</h3>
+                        <label><span>Reporte exportado de Sizfra (.xlsx o .csv)</span>
+                            <input name="archivo" type="file" accept=".xlsx,.csv" required>
+                        </label>
+                        <label class="report-check"><input name="solo_zf" type="checkbox" value="1" checked> Comparar solo artículos con código ZF</label>
+                        <p class="report-note">Debe tener una columna de código y otra de saldo o cantidad.</p>
+                        <div class="report-actions">
+                            <button class="withdraw-button" type="submit">Comparar</button>
+                            <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
+                        </div>
+                    </form>
+                </div>
+                <p class="movement-history-message" id="report-message" role="status" aria-live="polite">Elige un reporte para verlo aquí.</p>
+                <div class="report-summary" id="report-summary" hidden></div>
+                <div class="movement-table-wrap" id="report-table-wrap" hidden>
+                    <table class="movement-table report-table">
+                        <thead id="report-table-head"></thead>
+                        <tbody id="report-table-body"></tbody>
+                    </table>
                 </div>
             </div>
             {% endif %}
