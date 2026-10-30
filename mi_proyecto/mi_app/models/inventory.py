@@ -20,6 +20,98 @@ ORIGEN_MANUAL = "Manual"
 ORIGEN_ALTA = "Alta de artículo"
 ORIGEN_IMPORTACION = "Importación Excel"
 ORIGEN_SALIDA_INTEGRADA = "Salida integrada"
+ORIGEN_REMISION = "Remisión"
+
+# Servicio que se le presta a la mercancía de clientes (grupo 004) y en qué va.
+TIPOS_SERVICIO = ("Mantenimiento", "Reparación", "Overhaul", "Fabricación", "Materia prima", "Otro")
+ESTADOS_SERVICIO = ("Recibido", "En servicio", "Terminado", "Entregado", "Cancelado")
+
+
+class Remision(db.Model):
+    """Remisión de salida: documento de entrega de mercancía a un cliente.
+
+    Las líneas guardan una copia de los datos del artículo para que la
+    remisión impresa no cambie si después se edita o elimina el artículo.
+    """
+
+    __tablename__ = "remisiones"
+
+    id = db.Column(db.Integer, primary_key=True)
+    consecutivo = db.Column(db.Integer, unique=True, nullable=False)
+    fecha = db.Column(db.Date, nullable=False)
+    cliente_nombre = db.Column(db.String(160), nullable=False)
+    cliente_nit = db.Column(db.String(32), nullable=False)
+    contacto = db.Column(db.String(120))
+    telefono = db.Column(db.String(60))
+    email = db.Column(db.String(160))
+    tipo_servicio = db.Column(db.String(30))
+    documento_entrega = db.Column(db.String(120))
+    observaciones = db.Column(db.Text)
+    operacion_sizfra = db.Column(db.String(6))
+    formulario = db.Column(db.String(24))
+    empleado = db.Column(db.String(120), nullable=False)
+    usuario = db.Column(db.String(80), nullable=False)
+    fecha_hora = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    lineas = db.relationship(
+        "RemisionLinea", back_populates="remision", order_by="RemisionLinea.id", cascade="all, delete-orphan"
+    )
+
+    @property
+    def numero(self) -> str:
+        return f"REM-{self.consecutivo:04d}"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "numero": self.numero,
+            "fecha": self.fecha.isoformat(),
+            "cliente_nombre": self.cliente_nombre,
+            "cliente_nit": self.cliente_nit,
+            "contacto": self.contacto,
+            "telefono": self.telefono,
+            "email": self.email,
+            "tipo_servicio": self.tipo_servicio,
+            "documento_entrega": self.documento_entrega,
+            "observaciones": self.observaciones,
+            "operacion_sizfra": self.operacion_sizfra,
+            "formulario": self.formulario,
+            "empleado": self.empleado,
+            "usuario": self.usuario,
+            "fecha_hora": self.fecha_hora.replace(tzinfo=timezone.utc).isoformat(timespec="seconds"),
+            "lineas": [linea.to_dict() for linea in self.lineas],
+        }
+
+
+class RemisionLinea(db.Model):
+    __tablename__ = "remision_lineas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_remision = db.Column(db.Integer, db.ForeignKey("remisiones.id"), nullable=False)
+    codigo = db.Column(db.String(24), nullable=False)
+    descripcion = db.Column(db.String(400), nullable=False)
+    unidad = db.Column(db.String(24), nullable=False)
+    procedencia = db.Column(db.String(20))
+    estado = db.Column(db.String(40))
+    subpartida = db.Column(db.String(20))
+    valor_fob_usd = db.Column(db.Numeric(14, 2))
+    cantidad = db.Column(db.Integer, nullable=False)
+    estado_servicio = db.Column(db.String(20))
+    remision = db.relationship("Remision", back_populates="lineas")
+
+    def to_dict(self):
+        return {
+            "codigo": self.codigo,
+            "descripcion": self.descripcion,
+            "unidad": self.unidad,
+            "procedencia": self.procedencia,
+            "estado": self.estado,
+            "subpartida": self.subpartida,
+            "valor_fob_usd": float(self.valor_fob_usd) if self.valor_fob_usd is not None else None,
+            "cantidad": self.cantidad,
+            "estado_servicio": self.estado_servicio,
+        }
 
 
 class RegistroAuditoria(db.Model):
@@ -116,6 +208,10 @@ class ArticuloInventario(db.Model):
     fecha_retiro = db.Column(db.Date)
     documento_retiro = db.Column(db.String(160))
     razon_retiro = db.Column(db.Text)
+    # Mercancía de clientes (grupo 004): de quién es, qué servicio y en qué va.
+    cliente = db.Column(db.String(160))
+    tipo_servicio = db.Column(db.String(30))
+    estado_servicio = db.Column(db.String(20))
     nombre = db.Column(db.String(120), nullable=False)
     categoria = db.Column(db.String(60), nullable=False)
     descripcion = db.Column(db.Text, nullable=False)
@@ -153,6 +249,9 @@ class MovimientoInventario(db.Model):
     # Por dónde se registró (ver ORIGENES_MOVIMIENTO) y la razón u observación.
     origen = db.Column(db.String(20))
     observaciones = db.Column(db.Text)
+    # Solo en salidas por remisión.
+    id_remision = db.Column(db.Integer, db.ForeignKey("remisiones.id"))
+    remision = db.relationship("Remision")
 
     def to_dict(self):
         fecha_hora = self.fecha_hora
@@ -177,6 +276,7 @@ class MovimientoInventario(db.Model):
             "referencia": self.salida.referencia if self.salida else None,
             "origen": self.origen,
             "observaciones": self.observaciones,
+            "id_remision": self.id_remision,
         }
 
 

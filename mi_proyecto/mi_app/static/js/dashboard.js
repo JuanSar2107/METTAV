@@ -469,6 +469,101 @@
         });
     }
 
+    const remissionDialog = document.querySelector("#remission-dialog");
+    const remissionOpenButton = document.querySelector("#open-remission");
+    const remissionForm = document.querySelector("#remission-form");
+
+    if (
+        remissionDialog instanceof HTMLDialogElement &&
+        remissionOpenButton instanceof HTMLButtonElement &&
+        remissionForm instanceof HTMLFormElement
+    ) {
+        const remissionLines = document.querySelector("#remission-lines");
+        const remissionLineTemplate = document.querySelector("#remission-line-template");
+        const remissionMessage = document.querySelector("#remission-message");
+        const remissionButton = document.querySelector("#remission-button");
+        const cardsByLabel = new Map(
+            [...document.querySelectorAll(".inventory-card")].map((card) => [`${card.dataset.code} · ${card.dataset.name}`, card]),
+        );
+
+        const addRemissionLine = () => {
+            const line = remissionLineTemplate.content.firstElementChild.cloneNode(true);
+            line.querySelector(".exit-line-remove").addEventListener("click", () => line.remove());
+            remissionLines.append(line);
+            line.querySelector("input").focus();
+        };
+
+        const showRemissionError = (text) => {
+            remissionMessage.textContent = text;
+            remissionMessage.dataset.state = "error";
+            remissionMessage.hidden = false;
+        };
+
+        remissionOpenButton.addEventListener("click", () => {
+            remissionForm.reset();
+            remissionLines.replaceChildren();
+            remissionMessage.hidden = true;
+            remissionButton.disabled = false;
+            addRemissionLine();
+            remissionDialog.showModal();
+        });
+        document.querySelector("#close-remission").addEventListener("click", () => remissionDialog.close());
+        remissionDialog.addEventListener("click", (event) => {
+            if (event.target === remissionDialog) remissionDialog.close();
+        });
+        document.querySelector("#remission-add-line").addEventListener("click", addRemissionLine);
+
+        remissionForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            remissionMessage.hidden = true;
+            const lineas = [];
+            for (const line of remissionLines.querySelectorAll(".remission-line")) {
+                const [article, quantity] = line.querySelectorAll("input");
+                const label = article.value.trim();
+                if (!label) continue;
+                const card = cardsByLabel.get(label);
+                if (!card) {
+                    showRemissionError(`"${label}" no es un artículo del inventario. Elígelo de la lista.`);
+                    return;
+                }
+                const cantidad = Number(quantity.value);
+                if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > Number(card.dataset.stock)) {
+                    showRemissionError(`Indica una cantidad entre 1 y ${card.dataset.stock} para ${card.dataset.code}.`);
+                    return;
+                }
+                lineas.push({ id: Number(card.dataset.id), cantidad, estado_servicio: line.querySelector("select").value });
+            }
+            if (!lineas.length) {
+                showRemissionError("Agrega al menos un artículo a la remisión.");
+                return;
+            }
+
+            // La pestaña se abre ya (con el clic del usuario) para que el navegador no la bloquee.
+            const printWindow = window.open("", "_blank");
+            remissionButton.disabled = true;
+            try {
+                const response = await fetch(remissionForm.dataset.remissionUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...Object.fromEntries(new FormData(remissionForm)), lineas }),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo crear la remisión.");
+                if (printWindow) {
+                    printWindow.location.href = result.url;
+                } else {
+                    window.open(result.url, "_blank");
+                }
+                remissionDialog.close();
+                window.location.reload();
+            } catch (error) {
+                printWindow?.close();
+                showRemissionError(error.message || "No se pudo conectar con el servidor.");
+                remissionButton.disabled = false;
+            }
+        });
+    }
+
     const addUserDialog = document.querySelector("#add-user-dialog");
     const addUserButton = document.querySelector("#open-add-user");
     const createUserForm = document.querySelector("#create-user-form");
@@ -703,7 +798,29 @@
         detailCode.textContent = card.dataset.code;
         detailLocation.textContent = card.dataset.location;
         detailStock.textContent = `${card.dataset.stock} ${card.dataset.unit}`;
-        // Datos de zona franca: solo se muestran los que el artículo tiene.
+        renderDetailFields(card);
+        if (serviceForm instanceof HTMLFormElement) {
+            serviceForm.elements.cliente.value = card.dataset.client || "";
+            serviceForm.elements.tipo_servicio.value = card.dataset.serviceType || "";
+            serviceForm.elements.estado_servicio.value = card.dataset.serviceStatus || "";
+            serviceMessage.hidden = true;
+            serviceEditor.open = false;
+        }
+        updateStockLimits(card);
+        quantityInput.value = Number(card.dataset.stock) > 0 ? "1" : "";
+        quantityInput.disabled = Number(card.dataset.stock) === 0;
+        withdrawButton.disabled = Number(card.dataset.stock) === 0;
+        entryQuantityInput.value = "1";
+        entryMessage.hidden = true;
+        message.hidden = true;
+        movementOperationInput.value = "";
+        movementFormInput.value = "";
+        movementNotesInput.value = "";
+        dialog.showModal();
+    };
+
+    // Datos de zona franca, trazabilidad y servicio: solo se muestran los que el artículo tiene.
+    const renderDetailFields = (card) => {
         dialog.querySelectorAll("[data-zf-field]").forEach((row) => {
             let value = card.dataset[row.dataset.zfField] || "";
             if (value && row.dataset.zfField === "fob") {
@@ -718,18 +835,54 @@
             row.querySelector("dd").textContent = value;
             row.hidden = !value;
         });
-        updateStockLimits(card);
-        quantityInput.value = Number(card.dataset.stock) > 0 ? "1" : "";
-        quantityInput.disabled = Number(card.dataset.stock) === 0;
-        withdrawButton.disabled = Number(card.dataset.stock) === 0;
-        entryQuantityInput.value = "1";
-        entryMessage.hidden = true;
-        message.hidden = true;
-        movementOperationInput.value = "";
-        movementFormInput.value = "";
-        movementNotesInput.value = "";
-        dialog.showModal();
     };
+
+    const serviceEditor = document.querySelector("#service-editor");
+    const serviceForm = document.querySelector("#service-form");
+    const serviceMessage = document.querySelector("#service-message");
+    if (serviceForm instanceof HTMLFormElement) {
+        serviceForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!selectedCard) return;
+            const button = serviceForm.querySelector("button[type=submit]");
+            button.disabled = true;
+            serviceMessage.hidden = true;
+            try {
+                const response = await fetch(selectedCard.dataset.serviceUrl, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(Object.fromEntries(new FormData(serviceForm))),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo guardar el servicio.");
+                const { cliente, tipo_servicio: tipo, estado_servicio: estado } = result.articulo;
+                selectedCard.dataset.client = cliente || "";
+                selectedCard.dataset.serviceType = tipo || "";
+                selectedCard.dataset.serviceStatus = estado || "";
+                // Etiqueta del estado sobre la imagen de la tarjeta.
+                let label = selectedCard.querySelector(".service-label");
+                if (estado) {
+                    if (!label) {
+                        label = document.createElement("span");
+                        selectedCard.querySelector(".item-image-wrap").append(label);
+                    }
+                    label.className = `service-label service-label--${estado.toLowerCase().replace(/\s+/g, "-")}`;
+                    label.textContent = estado;
+                } else {
+                    label?.remove();
+                }
+                renderDetailFields(selectedCard);
+                serviceMessage.textContent = result.cambios ? "Servicio actualizado." : "No había cambios.";
+                serviceMessage.dataset.state = "success";
+            } catch (error) {
+                serviceMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                serviceMessage.dataset.state = "error";
+            } finally {
+                serviceMessage.hidden = false;
+                button.disabled = false;
+            }
+        });
+    }
 
     // "2026-05-08" -> "8 may 2026" (sin pasar por la zona horaria del navegador).
     const formatDate = (isoDate) => {
@@ -1193,6 +1346,21 @@
             ["Artículo", (f) => `${f.codigo_articulo} · ${f.articulo}`],
             ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
         ],
+        remisiones: [
+            ["Número", (f) => {
+                const link = document.createElement("a");
+                link.href = f.url;
+                link.target = "_blank";
+                link.rel = "noopener";
+                link.textContent = f.numero;
+                return link;
+            }],
+            ["Fecha", (f) => formatDate(f.fecha)],
+            ["Cliente", (f) => `${f.cliente_nombre} · ${f.cliente_nit}`],
+            ["Servicio", (f) => f.tipo_servicio || ""],
+            ["Artículos", (f) => f.lineas.map((l) => `${l.cantidad} × ${l.codigo}`).join(", ")],
+            ["Sizfra", (f) => [f.operacion_sizfra && `Op. ${f.operacion_sizfra}`, f.formulario && `Form. ${f.formulario}`].filter(Boolean).join(" · ")],
+        ],
         conciliacion: [
             ["Estado", (f) => f.estado],
             ["Código", (f) => f.codigo],
@@ -1214,6 +1382,9 @@
         if (report === "salidas") {
             return [`${result.total} salidas integradas.`];
         }
+        if (report === "remisiones") {
+            return [`${result.total} remisiones. Haz clic en el número para abrirla e imprimirla.`];
+        }
         const r = result.resumen;
         return [
             `Columnas usadas del archivo: código "${result.columnas.codigo}", saldo "${result.columnas.saldo}".`,
@@ -1224,6 +1395,9 @@
     const reportRows = (report, result) => {
         if (report === "salidas") {
             return result.salidas.flatMap((s) => s.movimientos.map((m) => ({ ...m, salida: s.id, proceso: s.proceso, referencia: s.referencia })));
+        }
+        if (report === "remisiones") {
+            return result.remisiones;
         }
         return result.filas;
     };
@@ -1295,7 +1469,12 @@
                     }
                     tr.append(...columns.map(([, value]) => {
                         const td = document.createElement("td");
-                        td.textContent = value(row);
+                        const content = value(row);
+                        if (content instanceof Node) {
+                            td.append(content);
+                        } else {
+                            td.textContent = content;
+                        }
                         return td;
                     }));
                     return tr;
@@ -1307,7 +1486,7 @@
             }
         });
 
-        form.querySelector("[data-download]").addEventListener("click", async () => {
+        form.querySelector("[data-download]")?.addEventListener("click", async () => {
             if (!form.reportValidity()) return;
             try {
                 const response = await fetchReport(form, true);

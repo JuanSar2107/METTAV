@@ -102,10 +102,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .routes.users import usuarios_bp
     from .routes.assistant import asistente_bp
     from .routes.reports import reportes_bp
+    from .routes.remissions import remisiones_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(inventario_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(remisiones_bp)
     app.register_blueprint(usuarios_bp)
     app.register_blueprint(asistente_bp)
 
@@ -161,6 +163,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             "rol": "VARCHAR(12)",
             "origen": "VARCHAR(20)",
             "observaciones": "TEXT",
+            "id_remision": "INTEGER REFERENCES remisiones (id)",
         }
         missing_movement_columns = {
             column_name: column_type
@@ -218,6 +221,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             "fecha_retiro": "DATE",
             "documento_retiro": "VARCHAR(160)",
             "razon_retiro": "TEXT",
+            "cliente": "VARCHAR(160)",
+            "tipo_servicio": "VARCHAR(30)",
+            "estado_servicio": "VARCHAR(20)",
         }
         missing_article_columns = {
             column_name: column_type

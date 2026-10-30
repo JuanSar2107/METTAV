@@ -18,11 +18,13 @@ from mi_app.models import (
     Usuario,
 )
 from mi_app.models.inventory import (
+    ESTADOS_SERVICIO,
     ORIGEN_ALTA,
     ORIGEN_IMPORTACION,
     ORIGEN_MANUAL,
     ORIGEN_SALIDA_INTEGRADA,
     PROCESOS_INTEGRACION,
+    TIPOS_SERVICIO,
 )
 from mi_app.zona_franca import (
     campos_trazabilidad,
@@ -38,7 +40,7 @@ _RE_OPERACION = re.compile(r"^\d{1,6}$")
 _RE_FORMULARIO = re.compile(r"^[A-Za-z0-9-]{1,24}$")
 
 
-def _datos_sizfra(datos) -> dict:
+def datos_sizfra(datos) -> dict:
     """Valida la operación y el formulario de Sizfra (ambos opcionales)."""
     operacion = str(datos.get("operacion_sizfra") or "").strip()
     formulario = str(datos.get("formulario") or "").strip().upper()
@@ -58,6 +60,43 @@ def _observaciones(datos) -> str | None:
     if len(texto) > 2000:
         raise ValueError("Las observaciones no pueden superar 2000 caracteres.")
     return texto or None
+
+
+def campos_servicio(datos) -> dict:
+    """Cliente, tipo y estado del servicio (opcionales; para mercancía de clientes)."""
+    cliente = str(datos.get("cliente") or "").strip()
+    tipo = str(datos.get("tipo_servicio") or "").strip()
+    estado = str(datos.get("estado_servicio") or "").strip()
+    if len(cliente) > 160:
+        raise ValueError("El cliente no puede superar 160 caracteres.")
+    if tipo and tipo not in TIPOS_SERVICIO:
+        raise ValueError("El tipo de servicio debe ser: " + ", ".join(TIPOS_SERVICIO) + ".")
+    if estado and estado not in ESTADOS_SERVICIO:
+        raise ValueError("El estado del servicio debe ser: " + ", ".join(ESTADOS_SERVICIO) + ".")
+    return {"cliente": cliente or None, "tipo_servicio": tipo or None, "estado_servicio": estado or None}
+
+
+def descontar_stock(lineas: list[tuple[int, int]]) -> ArticuloInventario | None:
+    """Descuenta (id_articulo, cantidad) de cada línea en la transacción actual.
+
+    Usa la misma condición que un retiro normal. Si a una línea le falta
+    stock deshace todo y devuelve ese artículo; si todo sale bien devuelve
+    None y el llamador hace el commit.
+    """
+    for id_articulo, cantidad in lineas:
+        resultado = db.session.execute(
+            update(ArticuloInventario)
+            .where(
+                ArticuloInventario.id == id_articulo,
+                ArticuloInventario.stock >= cantidad,
+                ArticuloInventario.stock_maximo >= cantidad,
+            )
+            .values(stock=ArticuloInventario.stock - cantidad)
+        )
+        if resultado.rowcount == 0:
+            db.session.rollback()
+            return db.session.get(ArticuloInventario, id_articulo)
+    return None
 
 
 def _auditar(usuario: Usuario, accion: str, codigo: str | None = None, detalle: str | None = None) -> None:
@@ -120,6 +159,7 @@ def crear_articulo():
     try:
         campos_zf = campos_zona_franca(request.form)
         campos_zf.update(campos_trazabilidad(request.form))
+        campos_zf.update(campos_servicio(request.form))
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -337,6 +377,37 @@ def eliminar_articulo(id_articulo: int):
     return jsonify(mensaje="Artículo eliminado.")
 
 
+@inventario_bp.patch("/<int:id_articulo>/servicio")
+def actualizar_servicio(id_articulo: int):
+    """Cambia el cliente, el tipo o el estado del servicio de un artículo y lo audita."""
+    error = _error_admin()
+    if error is not None:
+        return error
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    if articulo is None:
+        return jsonify(error="El artículo no existe."), 404
+    datos = request.get_json(silent=True)
+    if not isinstance(datos, dict):
+        return jsonify(error="Envía los datos del servicio en formato JSON."), 400
+    try:
+        nuevos = campos_servicio(datos)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+
+    nombres = {"cliente": "cliente", "tipo_servicio": "servicio", "estado_servicio": "estado"}
+    cambios = [
+        f"{nombres[campo]}: {getattr(articulo, campo) or '—'} → {valor or '—'}"
+        for campo, valor in nuevos.items()
+        if getattr(articulo, campo) != valor
+    ]
+    if cambios:
+        for campo, valor in nuevos.items():
+            setattr(articulo, campo, valor)
+        _auditar(_usuario_actual(), "Actualizar servicio", articulo.codigo, "; ".join(cambios))
+        db.session.commit()
+    return jsonify(articulo={"id": articulo.id, **nuevos}, cambios=len(cambios))
+
+
 @inventario_bp.get("/movimientos")
 def listar_movimientos():
     usuario = _usuario_actual()
@@ -370,7 +441,7 @@ def retirar_articulo(id_articulo: int):
     if not _cantidad_valida(cantidad):
         return jsonify(error="Indica una cantidad entera mayor que cero."), 400
     try:
-        sizfra = _datos_sizfra(datos)
+        sizfra = datos_sizfra(datos)
         observaciones = _observaciones(datos)
     except ValueError as error:
         return jsonify(error=str(error)), 400
@@ -441,7 +512,7 @@ def ingresar_articulo(id_articulo: int):
     if not _cantidad_valida(cantidad):
         return jsonify(error="Indica una cantidad entera mayor que cero."), 400
     try:
-        sizfra = _datos_sizfra(datos)
+        sizfra = datos_sizfra(datos)
         observaciones = _observaciones(datos)
     except ValueError as error:
         return jsonify(error=str(error)), 400
@@ -546,7 +617,7 @@ def crear_salida_integrada():
     if len(observaciones) > 2000:
         return jsonify(error="Las observaciones no pueden superar 2000 caracteres."), 400
     try:
-        sizfra = _datos_sizfra(datos)
+        sizfra = datos_sizfra(datos)
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
@@ -563,27 +634,14 @@ def crear_salida_integrada():
         return jsonify(error="Indica la referencia del equipo al que se integran las partes."), 400
     referencia = referencia[:120]
 
-    # Se descuenta cada línea con la misma condición que un retiro normal;
-    # si una falla se deshace todo.
-    for linea, _rol in lineas:
-        resultado = db.session.execute(
-            update(ArticuloInventario)
-            .where(
-                ArticuloInventario.id == linea["id"],
-                ArticuloInventario.stock >= linea["cantidad"],
-                ArticuloInventario.stock_maximo >= linea["cantidad"],
-            )
-            .values(stock=ArticuloInventario.stock - linea["cantidad"])
-        )
-        if resultado.rowcount == 0:
-            db.session.rollback()
-            articulo = db.session.get(ArticuloInventario, linea["id"])
-            return jsonify(
-                error=f"No hay suficientes unidades de {articulo.codigo} · {articulo.nombre} "
-                      f"(disponibles: {articulo.stock}). No se descontó nada.",
-                id_articulo=articulo.id,
-                stock=articulo.stock,
-            ), 409
+    sin_stock = descontar_stock([(linea["id"], linea["cantidad"]) for linea, _rol in lineas])
+    if sin_stock is not None:
+        return jsonify(
+            error=f"No hay suficientes unidades de {sin_stock.codigo} · {sin_stock.nombre} "
+                  f"(disponibles: {sin_stock.stock}). No se descontó nada.",
+            id_articulo=sin_stock.id,
+            stock=sin_stock.stock,
+        ), 409
 
     salida = SalidaIntegrada(
         proceso=proceso,
@@ -670,5 +728,8 @@ def trazabilidad_articulo(codigo: str):
             "fecha_retiro": articulo.fecha_retiro.isoformat() if articulo.fecha_retiro else None,
             "documento_retiro": articulo.documento_retiro,
             "razon_retiro": articulo.razon_retiro,
+            "cliente": articulo.cliente,
+            "tipo_servicio": articulo.tipo_servicio,
+            "estado_servicio": articulo.estado_servicio,
         }
     return jsonify(codigo=codigo, articulo=datos_articulo, eventos=eventos)

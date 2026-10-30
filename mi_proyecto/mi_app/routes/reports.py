@@ -112,6 +112,9 @@ def reporte_inventario():
         consulta = consulta.filter(ArticuloInventario.grupo == grupo)
     if categoria:
         consulta = consulta.filter(ArticuloInventario.categoria == categoria)
+    estado_servicio = (request.args.get("estado_servicio") or "").strip()
+    if estado_servicio:
+        consulta = consulta.filter(ArticuloInventario.estado_servicio == estado_servicio)
     if texto:
         patron = f"%{texto}%"
         consulta = consulta.filter(
@@ -142,6 +145,9 @@ def reporte_inventario():
             "estado": a.estado,
             "responsable": a.responsable,
             "serial": a.serial,
+            "cliente": a.cliente,
+            "tipo_servicio": a.tipo_servicio,
+            "estado_servicio": a.estado_servicio,
         })
         clave = a.grupo or "Sin grupo"
         grupo_resumen = resumen.setdefault(clave, {
@@ -162,7 +168,7 @@ def reporte_inventario():
             "Inventario",
             ["Código ZF", "Código interno", "Descripción", "Grupo", "Nombre del grupo", "Categoría",
              "Ubicación", "Stock", "Unidad", "Subpartida", "Valor FOB USD", "Valor total USD",
-             "Procedencia", "Estado", "Responsable", "Serial"],
+             "Procedencia", "Estado", "Responsable", "Serial", "Cliente", "Servicio", "Estado del servicio"],
             [list(f.values()) for f in filas],
             "reporte-inventario",
         )

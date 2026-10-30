@@ -103,6 +103,12 @@
                         </svg>
                         <span>Salida integrada</span>
                     </button>
+                    <button class="btn-add-user" id="open-remission" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 3h9l3 3v15H6zM9 9h6m-6 4h6m-6 4h4" />
+                        </svg>
+                        <span>Remisión de salida</span>
+                    </button>
                     {% if es_admin %}
                     <div class="admin-action-buttons">
                         <button class="btn-add-item" id="open-add-item" type="button">
@@ -202,6 +208,10 @@
                     data-exit-date="{{ articulo.fecha_retiro.isoformat() if articulo.fecha_retiro else '' }}"
                     data-exit-doc="{{ articulo.documento_retiro or '' }}"
                     data-exit-reason="{{ articulo.razon_retiro or '' }}"
+                    data-client="{{ articulo.cliente or '' }}"
+                    data-service-type="{{ articulo.tipo_servicio or '' }}"
+                    data-service-status="{{ articulo.estado_servicio or '' }}"
+                    data-service-url="{{ url_for('inventario.actualizar_servicio', id_articulo=articulo.id) }}"
                     data-category="{{ articulo.categoria }}"
                     data-description="{{ articulo.descripcion }}"
                     data-location="{{ articulo.ubicacion }}"
@@ -223,6 +233,9 @@
                             decoding="async"
                         >
                         <span class="category-label">{{ articulo.categoria }}</span>
+                        {% if articulo.estado_servicio %}
+                        <span class="service-label service-label--{{ articulo.estado_servicio|lower|replace(' ', '-') }}">{{ articulo.estado_servicio }}</span>
+                        {% endif %}
                     </div>
                     <div class="item-card-body">
                         <h2>{{ articulo.nombre }}</h2>
@@ -447,6 +460,12 @@
                                 <option value="sin-grupo">Sin grupo</option>
                             </select>
                         </label>
+                        <label><span>Estado del servicio</span>
+                            <select name="estado_servicio">
+                                <option value="">Todos</option>
+                                {% for estado in estados_servicio %}<option value="{{ estado }}">{{ estado }}</option>{% endfor %}
+                            </select>
+                        </label>
                         <label><span>Categoría</span>
                             <select name="categoria">
                                 <option value="">Todas</option>
@@ -490,6 +509,17 @@
                         <div class="report-actions">
                             <button class="withdraw-button" type="submit">Ver</button>
                             <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
+                        </div>
+                    </form>
+                    <form class="report-card" data-report="remisiones" data-report-url="{{ url_for('remisiones.listar_remisiones') }}" data-no-excel>
+                        <h3>Remisiones de salida</h3>
+                        <div class="report-dates">
+                            <label><span>Desde</span><input name="desde" type="date"></label>
+                            <label><span>Hasta</span><input name="hasta" type="date"></label>
+                        </div>
+                        <label><span>Cliente o NIT</span><input name="cliente" type="search" autocomplete="off"></label>
+                        <div class="report-actions">
+                            <button class="withdraw-button" type="submit">Ver</button>
                         </div>
                     </form>
                     <form class="report-card" data-report="conciliacion" data-report-url="{{ url_for('reportes.conciliacion') }}" enctype="multipart/form-data">
@@ -550,8 +580,31 @@
                 <div data-zf-field="exitDate" hidden><dt>Fecha de retiro</dt><dd></dd></div>
                 <div data-zf-field="exitDoc" hidden><dt>Documento de retiro</dt><dd></dd></div>
                 <div data-zf-field="exitReason" hidden><dt>Razón del retiro</dt><dd></dd></div>
+                <div data-zf-field="client" hidden><dt>Cliente</dt><dd></dd></div>
+                <div data-zf-field="serviceType" hidden><dt>Servicio</dt><dd></dd></div>
+                <div data-zf-field="serviceStatus" hidden><dt>Estado del servicio</dt><dd></dd></div>
             </dl>
             {% if es_admin %}
+            <details class="service-editor" id="service-editor">
+                <summary>Cliente y estado del servicio</summary>
+                <form id="service-form">
+                    <label><span>Cliente</span><input name="cliente" type="text" maxlength="160" autocomplete="off"></label>
+                    <label><span>Servicio</span>
+                        <select name="tipo_servicio">
+                            <option value="">Sin servicio</option>
+                            {% for tipo in tipos_servicio %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label><span>Estado</span>
+                        <select name="estado_servicio">
+                            <option value="">Sin estado</option>
+                            {% for estado in estados_servicio %}<option value="{{ estado }}">{{ estado }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <button class="withdraw-button" type="submit">Guardar</button>
+                </form>
+                <p class="dialog-message" id="service-message" role="status" aria-live="polite" hidden></p>
+            </details>
             <button class="btn-dialog-secondary trace-open-button" id="open-trace" type="button"
                 data-trace-url="{{ url_for('inventario.trazabilidad_articulo', codigo='__CODIGO__') }}">
                 Ver trazabilidad completa
@@ -650,6 +703,80 @@
                 <button class="withdraw-button" id="integrated-exit-button" type="submit">Registrar salida</button>
             </div>
         </form>
+    </div>
+</dialog>
+
+<dialog class="item-dialog admin-dialog" id="remission-dialog" aria-labelledby="remission-title">
+    <button class="dialog-close" id="close-remission" type="button" aria-label="Cerrar ventana">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">ENTREGA A CLIENTE</p>
+        <h2 id="remission-title">Remisión de salida</h2>
+        <p class="role-note">Se descuenta del stock cada artículo, queda en el historial y se abre la remisión para imprimirla o guardarla como PDF.</p>
+        <form id="remission-form" data-remission-url="{{ url_for('remisiones.crear_remision') }}">
+            <div class="admin-form-grid">
+                <p class="admin-field--full admin-form-section">1. Información del cliente</p>
+                <label class="admin-field admin-field--full"><span>Cliente</span>
+                    <input name="cliente_nombre" type="text" maxlength="160" required placeholder="Ej. MOTORKAM COMPANY S.A.S">
+                </label>
+                <label class="admin-field"><span>NIT / CC</span>
+                    <input name="cliente_nit" type="text" maxlength="32" required placeholder="Ej. 900.059.427-0">
+                </label>
+                <label class="admin-field"><span>Contacto</span>
+                    <input name="contacto" type="text" maxlength="120">
+                </label>
+                <label class="admin-field"><span>Teléfono</span>
+                    <input name="telefono" type="tel" maxlength="60">
+                </label>
+                <label class="admin-field"><span>Email</span>
+                    <input name="email" type="email" maxlength="160">
+                </label>
+                <label class="admin-field"><span>Tipo de servicio</span>
+                    <select name="tipo_servicio">
+                        <option value="">Sin indicar</option>
+                        {% for tipo in tipos_servicio %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="admin-field"><span>Documento de entrega</span>
+                    <input name="documento_entrega" type="text" maxlength="120" placeholder="N/A">
+                </label>
+                <p class="admin-field--full admin-form-section">2. Mercancía</p>
+                <div class="admin-field--full exit-lines" id="remission-lines"></div>
+                <div class="admin-field--full">
+                    <button class="btn-dialog-secondary" id="remission-add-line" type="button">+ Agregar artículo</button>
+                </div>
+                <p class="admin-field--full admin-form-section">Datos de la salida</p>
+                <label class="admin-field"><span>Fecha</span>
+                    <input name="fecha" type="date">
+                </label>
+                <label class="admin-field"><span>Operación Sizfra</span>
+                    <input name="operacion_sizfra" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 420" autocomplete="off">
+                </label>
+                <label class="admin-field"><span>Formulario</span>
+                    <input name="formulario" type="text" maxlength="24" placeholder="Ej. 1383926" autocomplete="off">
+                </label>
+                <label class="admin-field admin-field--full"><span>Observaciones</span>
+                    <textarea name="observaciones" rows="2" maxlength="2000"></textarea>
+                </label>
+            </div>
+            <p class="dialog-message" id="remission-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="remission-button" type="submit">Crear remisión</button>
+            </div>
+        </form>
+        <template id="remission-line-template">
+            <div class="exit-line remission-line">
+                <input type="text" list="integrated-exit-articles" placeholder="Artículo: código o nombre" aria-label="Artículo" autocomplete="off">
+                <input type="number" min="1" step="1" value="1" aria-label="Cantidad">
+                <select aria-label="Estado de servicio">
+                    {% for estado in estados_servicio %}<option value="{{ estado }}" {% if estado == 'Entregado' %}selected{% endif %}>{{ estado }}</option>{% endfor %}
+                </select>
+                <button type="button" class="exit-line-remove">Quitar</button>
+            </div>
+        </template>
     </div>
 </dialog>
 
@@ -858,6 +985,25 @@
                 <label class="admin-field" for="new-item-entry-doc">
                     <span>Documento soporte</span>
                     <input id="new-item-entry-doc" name="documento_soporte" type="text" maxlength="160" placeholder="Ej. Remisión No 0001">
+                </label>
+                <p class="admin-field--full admin-form-section">Mercancía de clientes (opcional)</p>
+                <label class="admin-field admin-field--full" for="new-item-client">
+                    <span>Cliente</span>
+                    <input id="new-item-client" name="cliente" type="text" maxlength="160" placeholder="Ej. MOTORKAM COMPANY S.A.S">
+                </label>
+                <label class="admin-field" for="new-item-service-type">
+                    <span>Servicio</span>
+                    <select id="new-item-service-type" name="tipo_servicio">
+                        <option value="">Sin servicio</option>
+                        {% for tipo in tipos_servicio %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="admin-field" for="new-item-service-status">
+                    <span>Estado del servicio</span>
+                    <select id="new-item-service-status" name="estado_servicio">
+                        <option value="">Sin estado</option>
+                        {% for estado in estados_servicio %}<option value="{{ estado }}">{{ estado }}</option>{% endfor %}
+                    </select>
                 </label>
                 <label class="admin-field admin-field--full" for="new-item-image">
                     <span>Imagen del artículo</span>

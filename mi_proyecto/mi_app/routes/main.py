@@ -3,7 +3,7 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, se
 from mi_app.extensions import db
 from mi_app.security import usuario_actual
 from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
-from mi_app.models.inventory import GRUPOS_INVENTARIO, PROCESOS_INTEGRACION
+from mi_app.models.inventory import ESTADOS_SERVICIO, GRUPOS_INVENTARIO, PROCESOS_INTEGRACION, TIPOS_SERVICIO
 
 main_bp = Blueprint('main', __name__)
 
@@ -29,6 +29,10 @@ _DESCRIPCIONES_RUTAS = {
     "reportes.reporte_movimientos": "Reporte de ingresos y retiros por rango de fechas (JSON o ?formato=xlsx); requiere sesión de administrador.",
     "reportes.reporte_salidas_integradas": "Reporte de salidas integradas por rango de fechas (JSON o ?formato=xlsx); requiere sesión de administrador.",
     "reportes.conciliacion": "Compara un reporte exportado de Sizfra con el stock de la app; requiere sesión de administrador.",
+    "inventario.actualizar_servicio": "Cambia el cliente, el tipo o el estado del servicio de un artículo; requiere sesión de administrador.",
+    "remisiones.crear_remision": "Crea una remisión de salida y da de baja la mercancía; requiere sesión.",
+    "remisiones.listar_remisiones": "Lista las remisiones por fecha o cliente; requiere sesión.",
+    "remisiones.ver_remision": "Muestra la remisión lista para imprimir o guardar como PDF; requiere sesión.",
     "inventario.trazabilidad_articulo": "Devuelve los movimientos y la auditoría de un código, aunque el artículo se haya eliminado; requiere sesión de administrador.",
     "inventario.listar_movimientos": "Lista los retiros de inventario; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
@@ -140,6 +144,8 @@ def dashboard():
         categorias=categorias,
         grupos_inventario=GRUPOS_INVENTARIO,
         procesos_integracion=PROCESOS_INTEGRACION,
+        tipos_servicio=TIPOS_SERVICIO,
+        estados_servicio=ESTADOS_SERVICIO,
         usuarios_registrados=usuarios_registrados,
         es_admin=usuario.es_admin,
     )
