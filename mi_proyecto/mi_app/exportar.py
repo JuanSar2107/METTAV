@@ -113,14 +113,17 @@ def respuesta_pdf(
     if not filas:
         datos.append([Paragraph("No hay registros con esos filtros.", estilo_celda)] + [""] * (len(encabezados) - 1))
     tabla = Table(datos, colWidths=[ancho_util * a for a in anchos], repeatRows=1)
-    tabla.setStyle(TableStyle([
+    estilo = [
         ("BACKGROUND", (0, 0), (-1, 0), azul),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#B8C7D3")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#EDF4F8")]),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
+    ]
+    if not filas:
+        estilo.append(("SPAN", (0, 1), (-1, 1)))  # el aviso ocupa todo el ancho
+    tabla.setStyle(TableStyle(estilo))
     historia.append(tabla)
 
     def pie(canvas, documento):
