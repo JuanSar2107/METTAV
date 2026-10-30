@@ -53,7 +53,7 @@ def _rango_utc() -> tuple[datetime | None, datetime | None]:
     return (a_utc(desde) if desde else None, a_utc(hasta + timedelta(days=1)) if hasta else None)
 
 
-def _hora_local(valor: datetime) -> str:
+def hora_colombia(valor: datetime) -> str:
     return valor.replace(tzinfo=timezone.utc).astimezone(_HORA_COLOMBIA).strftime("%Y-%m-%d %H:%M")
 
 
@@ -213,7 +213,7 @@ def reporte_movimientos():
             ["Fecha (hora Colombia)", "Tipo", "Código", "Artículo", "Categoría", "Cantidad", "Unidad",
              "Operación Sizfra", "Formulario", "Origen", "Salida integrada", "Rol", "Referencia",
              "Observaciones", "Empleado", "Usuario"],
-            [[_hora_local(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad,
+            [[hora_colombia(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad,
               m.unidad, m.operacion_sizfra, m.formulario, m.origen, m.id_salida, m.rol,
               m.salida.referencia if m.salida else None, m.observaciones, m.empleado, m.usuario]
              for m in movimientos],
@@ -245,7 +245,7 @@ def reporte_salidas_integradas():
             "Salidas integradas",
             ["Salida", "Fecha (hora Colombia)", "Proceso", "Referencia del equipo", "Rol", "Código",
              "Artículo", "Cantidad", "Unidad", "Operación Sizfra", "Formulario", "Observaciones", "Empleado"],
-            [[s.id, _hora_local(s.fecha_hora), s.proceso, s.referencia, m.rol, m.codigo_articulo,
+            [[s.id, hora_colombia(s.fecha_hora), s.proceso, s.referencia, m.rol, m.codigo_articulo,
               m.articulo, m.cantidad, m.unidad, s.operacion_sizfra, s.formulario, s.observaciones, s.empleado]
              for s in salidas for m in s.movimientos],
             "reporte-salidas-integradas",
