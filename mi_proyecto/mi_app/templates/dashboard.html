@@ -277,6 +277,16 @@
                         <p class="welcome-message">Directorio de usuarios registrados y colaboradores del sistema METTAV.</p>
                     </div>
                     <div class="inventory-heading-actions">
+                        <div class="export-buttons" data-export-url="{{ url_for('usuarios.listar_usuarios') }}" data-export-scope="usuarios">
+                            <button class="btn-add-user" type="button" data-export-format="xlsx">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
+                                <span>Descargar Excel</span>
+                            </button>
+                            <button class="btn-add-user" type="button" data-export-format="pdf">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
+                                <span>Descargar PDF</span>
+                            </button>
+                        </div>
                         <button class="btn-add-user" id="open-add-user-from-panel" type="button">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-2v6m-3-3h6" />
@@ -396,7 +406,19 @@
                             <h2 class="section-heading-title">Historial de movimientos</h2>
                             <p class="welcome-message">Ingresos y retiros de herramientas y materiales.</p>
                         </div>
-                        <span class="results-count" id="movement-results-count" aria-live="polite"></span>
+                        <div class="export-actions">
+                            <span class="results-count" id="movement-results-count" aria-live="polite"></span>
+                            <div class="export-buttons" data-export-url="{{ url_for('inventario.listar_movimientos') }}" data-export-scope="movimientos">
+                                <button class="btn-add-user" type="button" data-export-format="xlsx">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
+                                    <span>Descargar Excel</span>
+                                </button>
+                                <button class="btn-add-user" type="button" data-export-format="pdf">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
+                                    <span>Descargar PDF</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="movement-filters" id="movement-filters" hidden>
                         <label class="search-field" for="movement-search">

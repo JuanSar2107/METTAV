@@ -1479,6 +1479,35 @@ body {
     }
 }
 
+.export-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.export-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.export-buttons .btn-add-user:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+@media (max-width: 640px) {
+    .export-actions {
+        align-items: flex-start;
+    }
+
+    .export-buttons {
+        justify-content: flex-start;
+    }
+}
+
 .report-forms {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

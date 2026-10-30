@@ -1497,6 +1497,55 @@
         });
     });
 
+    // ==========================================
+    // Descargas en Excel y PDF del historial y de usuarios (con los filtros de la pantalla)
+    // ==========================================
+    const exportFilters = {
+        movimientos: () => ({
+            q: movementSearchInput instanceof HTMLInputElement ? movementSearchInput.value.trim() : "",
+            categoria: movementCategoryFilter instanceof HTMLSelectElement ? movementCategoryFilter.value : "",
+            dia: movementDateInput instanceof HTMLInputElement ? movementDateInput.value : "",
+        }),
+        usuarios: () => ({
+            q: document.querySelector("#users-search")?.value.trim() || "",
+            rol: document.querySelector("#users-role-filter")?.value || "",
+        }),
+    };
+
+    document.querySelectorAll(".export-buttons").forEach((group) => {
+        group.querySelectorAll("[data-export-format]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const params = new URLSearchParams({ formato: button.dataset.exportFormat });
+                Object.entries(exportFilters[group.dataset.exportScope]()).forEach(([key, value]) => {
+                    if (value) params.set(key, value);
+                });
+                const label = button.querySelector("span");
+                const originalText = label.textContent;
+                button.disabled = true;
+                label.textContent = "Generando...";
+                try {
+                    const response = await fetch(`${group.dataset.exportUrl}?${params}`);
+                    if (!response.ok) {
+                        const result = await response.json().catch(() => ({}));
+                        throw new Error(result.error || "No se pudo generar el archivo.");
+                    }
+                    const disposition = response.headers.get("Content-Disposition") || "";
+                    const match = disposition.match(/filename="?([^";]+)"?/);
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(await response.blob());
+                    link.download = match ? match[1] : `descarga.${button.dataset.exportFormat}`;
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                } catch (error) {
+                    window.alert(error.message || "No se pudo conectar con el servidor.");
+                } finally {
+                    button.disabled = false;
+                    label.textContent = originalText;
+                }
+            });
+        });
+    });
+
     tabButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
             const targetId = btn.dataset.target;
