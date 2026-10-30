@@ -6,10 +6,10 @@ archivo de Excel para las auditorías de la zona franca.
 
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from io import BytesIO
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request
 
+from mi_app.exportar import respuesta_excel as _excel
 from mi_app.models import ArticuloInventario, MovimientoInventario, SalidaIntegrada
 from mi_app.models.inventory import GRUPOS_INVENTARIO
 from mi_app.security import usuario_actual
@@ -60,35 +60,6 @@ def hora_colombia(valor: datetime) -> str:
 def _numero(valor):
     """Decimal -> float para JSON y Excel (los valores FOB tienen 2 decimales)."""
     return float(valor) if isinstance(valor, Decimal) else valor
-
-
-def _excel(titulo: str, encabezados: list[str], filas: list[list], nombre_archivo: str):
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
-
-    libro = Workbook()
-    hoja = libro.active
-    hoja.title = titulo[:31]
-    hoja.append(encabezados)
-    for celda in hoja[1]:
-        celda.font = Font(bold=True, color="FFFFFF")
-        celda.fill = PatternFill("solid", fgColor="054A86")
-    for fila in filas:
-        hoja.append([_numero(valor) for valor in fila])
-    for indice, encabezado in enumerate(encabezados, start=1):
-        largo = max([len(str(encabezado))] + [len(str(f[indice - 1] or "")) for f in filas[:500]])
-        hoja.column_dimensions[hoja.cell(row=1, column=indice).column_letter].width = min(max(10, largo + 2), 60)
-    hoja.freeze_panes = "A2"
-
-    bufer = BytesIO()
-    libro.save(bufer)
-    bufer.seek(0)
-    return send_file(
-        bufer,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=f"{nombre_archivo}-{date.today().isoformat()}.xlsx",
-    )
 
 
 def _quiere_excel() -> bool:

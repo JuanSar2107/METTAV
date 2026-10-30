@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 import re
 
+from mi_app.exportar import respuesta_excel, respuesta_pdf
 from mi_app.extensions import db
 from mi_app.security import (
     MIN_LARGO_CONTRASENA,
@@ -102,7 +103,37 @@ def listar_usuarios():
         return jsonify(error="Solo un administrador puede ver la lista de usuarios."), 403
 
     usuarios = Usuario.query.order_by(Usuario.es_admin.desc(), Usuario.usuario.asc()).all()
-    return jsonify(usuarios=[_respuesta_usuario(u) for u in usuarios])
+    formato = (request.args.get("formato") or "").lower()
+    if formato not in ("xlsx", "pdf"):
+        return jsonify(usuarios=[_respuesta_usuario(u) for u in usuarios])
+
+    # Descarga: los mismos filtros que la pestaña Usuarios y Empleados (búsqueda y rol).
+    texto = (request.args.get("q") or "").strip().lower()
+    rol = (request.args.get("rol") or "").strip().lower()
+    filtros = []
+    if texto:
+        filtros.append(f"búsqueda \"{request.args['q'].strip()}\"")
+    if rol in ("admin", "empleado"):
+        filtros.append("solo administradores" if rol == "admin" else "solo empleados / usuarios")
+
+    def coincide(u: Usuario) -> bool:
+        contenido = " ".join(v or "" for v in (
+            u.usuario, u.nombre_completo, u.correo, u.numero_identidad, u.telefono,
+        )).lower()
+        return ((not texto or texto in contenido)
+                and (rol not in ("admin", "empleado") or u.es_admin == (rol == "admin")))
+
+    filas = [[u.usuario, u.nombre_completo, "Administrador" if u.es_admin else "Empleado", u.correo,
+              u.numero_identidad, u.telefono, u.direccion] for u in usuarios if coincide(u)]
+    encabezados = ["Usuario", "Nombre completo", "Rol", "Correo", "Número de identidad", "Teléfono", "Dirección"]
+    if formato == "xlsx":
+        return respuesta_excel("Usuarios", encabezados, filas, "usuarios-y-empleados")
+    return respuesta_pdf(
+        "Usuarios y empleados", encabezados, filas, "usuarios-y-empleados",
+        anchos=[0.12, 0.18, 0.1, 0.18, 0.12, 0.11, 0.19],
+        detalle=", ".join(filtros),
+        generado_por=usuario_actual.nombre_completo or usuario_actual.usuario,
+    )
 
 
 @usuarios_bp.post("/login")

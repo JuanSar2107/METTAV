@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from collections import Counter
 from uuid import uuid4
 
@@ -6,6 +7,8 @@ from flask import Blueprint, jsonify, request, url_for
 from sqlalchemy import case, update
 from sqlalchemy.exc import IntegrityError
 
+from mi_app.exportar import respuesta_excel, respuesta_pdf
+from mi_app.routes.reports import hora_colombia
 from mi_app.extensions import db
 from mi_app.security import usuario_actual
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
@@ -53,6 +56,11 @@ def datos_sizfra(datos) -> dict:
 
 def _cantidad_valida(cantidad) -> bool:
     return not isinstance(cantidad, bool) and isinstance(cantidad, int) and cantidad >= 1
+
+
+def _sin_tildes(texto: str) -> str:
+    """Igual que la búsqueda del navegador: minúsculas y sin tildes."""
+    return unicodedata.normalize("NFD", texto.strip().lower()).encode("ascii", "ignore").decode()
 
 
 def _observaciones(datos) -> str | None:
@@ -428,10 +436,61 @@ def listar_movimientos():
         .order_by(MovimientoInventario.fecha_hora.desc(), MovimientoInventario.id.desc())
         .all()
     )
-    return jsonify(
-        total=len(movimientos),
-        categorias=sorted({movimiento.categoria for movimiento in movimientos if movimiento.categoria}),
-        movimientos=[movimiento.to_dict() for movimiento in movimientos],
+    formato = (request.args.get("formato") or "").lower()
+    if formato not in ("xlsx", "pdf"):
+        return jsonify(
+            total=len(movimientos),
+            categorias=sorted({movimiento.categoria for movimiento in movimientos if movimiento.categoria}),
+            movimientos=[movimiento.to_dict() for movimiento in movimientos],
+        )
+
+    # Descarga: los mismos filtros que la pestaña Historial (búsqueda, categoría y día).
+    texto = _sin_tildes(request.args.get("q") or "")
+    categoria = (request.args.get("categoria") or "").strip()
+    dia = (request.args.get("dia") or "").strip()
+    filtros = []
+    if texto:
+        filtros.append(f"búsqueda \"{request.args['q'].strip()}\"")
+    if categoria:
+        filtros.append(f"categoría {categoria}")
+    if dia:
+        filtros.append(f"día {dia}")
+
+    def coincide(m: MovimientoInventario) -> bool:
+        contenido = _sin_tildes(" ".join(str(v or "") for v in (
+            m.tipo, m.empleado, m.usuario, m.articulo, m.codigo_articulo, m.categoria, m.operacion_sizfra,
+            m.formulario, m.salida.referencia if m.salida else "", m.salida.proceso if m.salida else "",
+            m.observaciones, m.origen,
+        )))
+        return ((not texto or texto in contenido)
+                and (not categoria or m.categoria == categoria)
+                and (not dia or hora_colombia(m.fecha_hora)[:10] == dia))
+
+    movimientos = [m for m in movimientos if coincide(m)]
+    encabezados = ["Fecha (hora Colombia)", "Tipo", "Código", "Artículo", "Categoría", "Cantidad", "Unidad",
+                   "Operación Sizfra", "Formulario", "Origen", "Detalle", "Observaciones", "Empleado", "Usuario"]
+
+    def detalle(m: MovimientoInventario) -> str:
+        if m.salida:
+            return (f"Equipo · {m.salida.proceso} #{m.id_salida}" if m.rol == "Principal"
+                    else f"Integrada en {m.salida.referencia} #{m.id_salida}")
+        return m.remision.numero if m.remision else ""
+
+    filas = [[hora_colombia(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad, m.unidad,
+              m.operacion_sizfra, m.formulario, m.origen, detalle(m), m.observaciones, m.empleado, m.usuario]
+             for m in movimientos]
+    if formato == "xlsx":
+        return respuesta_excel("Historial", encabezados, filas, "historial-movimientos")
+    return respuesta_pdf(
+        "Historial de movimientos",
+        ["Fecha", "Tipo", "Código", "Artículo", "Cant.", "Sizfra", "Origen / detalle", "Observaciones", "Empleado"],
+        [[f[0], f[1], f[2], f[3], f"{f[5]} {f[6]}",
+          " · ".join(x for x in (f[7] and f"Op. {f[7]}", f[8] and f"Form. {f[8]}") if x),
+          " · ".join(x for x in (f[9], f[10]) if x), f[11], f[12]] for f in filas],
+        "historial-movimientos",
+        anchos=[0.1, 0.06, 0.12, 0.19, 0.07, 0.11, 0.14, 0.13, 0.08],
+        detalle=", ".join(filtros),
+        generado_por=usuario.nombre_completo or usuario.usuario,
     )
 
 
