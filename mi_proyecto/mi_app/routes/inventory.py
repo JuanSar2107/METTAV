@@ -3,7 +3,7 @@ import unicodedata
 from collections import Counter
 from uuid import uuid4
 
-from flask import Blueprint, jsonify, request, url_for
+from flask import Blueprint, jsonify, request, send_file, url_for
 from sqlalchemy import case, update
 from sqlalchemy.exc import IntegrityError
 
@@ -29,12 +29,18 @@ from mi_app.models.inventory import (
     PROCESOS_INTEGRACION,
     TIPOS_SERVICIO,
 )
+from mi_app.documentos import guardar_documento, ruta_documento
 from mi_app.zona_franca import (
+    CATEGORIAS_SIGLA,
+    UBICACIONES_SIGLA,
     campos_trazabilidad,
     campos_zona_franca,
     codigo_valido,
+    codigos_siguientes,
+    grupo_por_ubicacion,
     leer_excel,
     normalizar_codigo,
+    validar_sin_salto,
 )
 
 inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
@@ -132,6 +138,23 @@ def _error_admin():
     return None
 
 
+@inventario_bp.get("/siguiente-codigo")
+def siguiente_codigo():
+    """Código ZF e interno que siguen para una categoría, ubicación y tipo."""
+    error = _error_admin()
+    if error is not None:
+        return error
+    try:
+        codigo, interno = codigos_siguientes(
+            request.args.get("categoria", "").strip().upper(),
+            request.args.get("ubicacion", "").strip().upper(),
+            request.args.get("tipo", "").strip().upper(),
+        )
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    return jsonify(codigo=codigo, codigo_interno=interno)
+
+
 @inventario_bp.post("/")
 def crear_articulo():
     error = _error_admin()
@@ -158,18 +181,34 @@ def crear_articulo():
     if stock < 0:
         return jsonify(error="El stock no puede ser negativo."), 400
 
-    # El código ZF es opcional: si no se indica, se genera uno interno.
-    codigo = normalizar_codigo(request.form.get("codigo", ""))
-    if codigo and not codigo_valido(codigo):
-        return jsonify(error="El código ZF solo admite letras, números y guiones (máximo 24)."), 400
-    if codigo and ArticuloInventario.query.filter_by(codigo=codigo).first() is not None:
-        return jsonify(error=f"Ya existe un artículo con el código {codigo}."), 409
+    # Con categoría, ubicación y tipo el código sale consecutivo: se calcula aquí, no se
+    # confía en el del navegador. Sin ellos se admite uno escrito a mano (p. ej. SER-...)
+    # y, si no se indica ninguno, se genera uno interno.
+    sigla_categoria = request.form.get("sigla_categoria", "").strip().upper()
+    sigla_ubicacion = request.form.get("sigla_ubicacion", "").strip().upper()
+    tipo_codigo = request.form.get("tipo", "").strip().upper()
+    codigo_automatico = bool(sigla_categoria or sigla_ubicacion)
     try:
         campos_zf = campos_zona_franca(request.form)
         campos_zf.update(campos_trazabilidad(request.form))
         campos_zf.update(campos_servicio(request.form))
+        if codigo_automatico:
+            codigo, campos_zf["codigo_interno"] = codigos_siguientes(sigla_categoria, sigla_ubicacion, tipo_codigo)
+        else:
+            codigo = normalizar_codigo(request.form.get("codigo", ""))
+            if codigo and not codigo_valido(codigo):
+                raise ValueError("El código ZF solo admite letras, números y guiones (máximo 24).")
+            if codigo:
+                validar_sin_salto(codigo)
     except ValueError as error:
         return jsonify(error=str(error)), 400
+    if codigo and ArticuloInventario.query.filter_by(codigo=codigo).first() is not None:
+        return jsonify(error=f"Ya existe un artículo con el código {codigo}."), 409
+    if codigo_automatico:
+        categoria = CATEGORIAS_SIGLA[sigla_categoria]
+        if ubicacion == "Sin asignar":
+            ubicacion = UBICACIONES_SIGLA[sigla_ubicacion]
+        campos_zf["grupo"] = campos_zf["grupo"] or grupo_por_ubicacion(sigla_ubicacion)
 
     # La imagen es opcional: sin ella se usa la misma imagen por defecto que en la importación.
     imagen = request.files.get("imagen")
@@ -395,9 +434,11 @@ def eliminar_articulo(id_articulo: int):
 @inventario_bp.patch("/<int:id_articulo>/servicio")
 def actualizar_servicio(id_articulo: int):
     """Cambia el cliente, el tipo o el estado del servicio de un artículo y lo audita."""
-    error = _error_admin()
-    if error is not None:
-        return error
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.puede_operar:
+        return jsonify(error="No tienes permiso para cambiar el servicio."), 403
     articulo = db.session.get(ArticuloInventario, id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
@@ -428,8 +469,8 @@ def listar_movimientos():
     usuario = _usuario_actual()
     if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
-    if not usuario.es_admin:
-        return jsonify(error="Solo un administrador puede ver el historial de movimientos."), 403
+    if not usuario.puede_operar:
+        return jsonify(error="No tienes permiso para ver el historial de movimientos."), 403
 
     movimientos = (
         MovimientoInventario.query
@@ -468,7 +509,8 @@ def listar_movimientos():
 
     movimientos = [m for m in movimientos if coincide(m)]
     encabezados = ["Fecha (hora Colombia)", "Tipo", "Código", "Artículo", "Categoría", "Cantidad", "Unidad",
-                   "Operación Sizfra", "Formulario", "Origen", "Detalle", "Observaciones", "Empleado", "Usuario"]
+                   "Operación Sizfra", "Formulario", "Origen", "Detalle", "Observaciones", "Empleado", "Usuario",
+                   "Documento soporte"]
 
     def detalle(m: MovimientoInventario) -> str:
         if m.salida:
@@ -477,7 +519,8 @@ def listar_movimientos():
         return m.remision.numero if m.remision else ""
 
     filas = [[hora_colombia(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad, m.unidad,
-              m.operacion_sizfra, m.formulario, m.origen, detalle(m), m.observaciones, m.empleado, m.usuario]
+              m.operacion_sizfra, m.formulario, m.origen, detalle(m), m.observaciones, m.empleado, m.usuario,
+              m.documento_nombre]
              for m in movimientos]
     if formato == "xlsx":
         return respuesta_excel("Historial", encabezados, filas, "historial-movimientos")
@@ -573,8 +616,11 @@ def ingresar_articulo(id_articulo: int):
 
     datos = request.get_json(silent=True)
     if not isinstance(datos, dict):
-        datos = {}
+        # "Ingresar existencias" llega como formulario porque puede traer el documento soporte.
+        datos = request.form
     cantidad = datos.get("cantidad")
+    if isinstance(cantidad, str) and cantidad.strip().isdigit():
+        cantidad = int(cantidad)
     if not _cantidad_valida(cantidad):
         return jsonify(error="Indica una cantidad entera mayor que cero."), 400
     try:
@@ -586,6 +632,14 @@ def ingresar_articulo(id_articulo: int):
     articulo = db.session.get(ArticuloInventario, id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
+
+    documento = request.files.get("documento")
+    documento_archivo = documento_nombre = None
+    if documento is not None and documento.filename:
+        try:
+            documento_archivo, documento_nombre, _ruta = guardar_documento(documento)
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
 
     # Los ingresos no tienen tope (materia prima y consumibles rotan
     # constantemente); stock_maximo solo guarda el stock más alto alcanzado.
@@ -618,6 +672,8 @@ def ingresar_articulo(id_articulo: int):
         unidad=articulo.unidad,
         origen=ORIGEN_MANUAL,
         observaciones=observaciones,
+        documento_archivo=documento_archivo,
+        documento_nombre=documento_nombre,
         **sizfra,
     )
     db.session.add(movimiento)
@@ -632,6 +688,23 @@ def ingresar_articulo(id_articulo: int):
         },
         movimiento=movimiento.to_dict(),
     )
+
+
+@inventario_bp.get("/movimientos/<int:id_movimiento>/documento")
+def descargar_documento(id_movimiento: int):
+    """Descarga el documento soporte de un ingreso."""
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.puede_operar:
+        return jsonify(error="No tienes permiso para ver los documentos soporte."), 403
+    movimiento = db.session.get(MovimientoInventario, id_movimiento)
+    if movimiento is None or not movimiento.documento_archivo:
+        return jsonify(error="El movimiento no tiene documento soporte."), 404
+    ruta, tipo = ruta_documento(movimiento.documento_archivo)
+    if not ruta.is_file():
+        return jsonify(error="No se encontró el archivo del documento soporte."), 404
+    return send_file(ruta, mimetype=tipo, as_attachment=True, download_name=movimiento.documento_nombre)
 
 
 @inventario_bp.post("/salidas-integradas")
@@ -757,8 +830,8 @@ def trazabilidad_articulo(codigo: str):
     usuario = _usuario_actual()
     if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
-    if not usuario.es_admin:
-        return jsonify(error="Solo un administrador puede ver la trazabilidad."), 403
+    if not usuario.puede_operar:
+        return jsonify(error="No tienes permiso para ver la trazabilidad."), 403
 
     codigo = normalizar_codigo(codigo)
     articulo = ArticuloInventario.query.filter_by(codigo=codigo).first()

@@ -4,6 +4,7 @@ from mi_app.extensions import db
 from mi_app.security import usuario_actual
 from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
 from mi_app.models.inventory import ESTADOS_SERVICIO, GRUPOS_INVENTARIO, PROCESOS_INTEGRACION, TIPOS_SERVICIO
+from mi_app.zona_franca import CATEGORIAS_SIGLA, TIPOS_CODIGO, UBICACIONES_SIGLA
 
 main_bp = Blueprint('main', __name__)
 
@@ -33,6 +34,8 @@ _DESCRIPCIONES_RUTAS = {
     "remisiones.crear_remision": "Crea una remisión de salida y da de baja la mercancía; requiere sesión.",
     "remisiones.listar_remisiones": "Lista las remisiones por fecha o cliente; requiere sesión.",
     "remisiones.ver_remision": "Muestra la remisión lista para imprimir o guardar como PDF; requiere sesión.",
+    "inventario.siguiente_codigo": "Devuelve el código ZF e interno que siguen en el consecutivo; requiere sesión de administrador.",
+    "inventario.descargar_documento": "Descarga el documento soporte de un ingreso; requiere sesión de administrador o auxiliar.",
     "inventario.trazabilidad_articulo": "Devuelve los movimientos y la auditoría de un código, aunque el artículo se haya eliminado; requiere sesión de administrador.",
     "inventario.listar_movimientos": "Lista los movimientos de inventario; con ?formato=xlsx o pdf los descarga con los filtros q, categoria y dia; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
@@ -148,6 +151,10 @@ def dashboard():
         estados_servicio=ESTADOS_SERVICIO,
         usuarios_registrados=usuarios_registrados,
         es_admin=usuario.es_admin,
+        puede_operar=usuario.puede_operar,
+        categorias_sigla=CATEGORIAS_SIGLA,
+        ubicaciones_sigla=UBICACIONES_SIGLA,
+        tipos_codigo=TIPOS_CODIGO,
     )
 
 

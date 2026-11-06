@@ -45,7 +45,7 @@
                     </span>
                 </button>
                 <span class="account-name">{{ usuario.usuario }}</span>
-                {% if es_admin %}<span class="role-label">Administrador</span>{% endif %}
+                {% if puede_operar %}<span class="role-label">{{ usuario.rol_nombre }}</span>{% endif %}
                 <button class="btn-logout" id="logout-button" type="button" aria-label="Cerrar sesión" title="Cerrar sesión">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M10 17l5-5-5-5M15 12H3m9-8h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
@@ -56,7 +56,7 @@
         </header>
 
         <div class="dashboard-content">
-            {% if es_admin %}
+            {% if puede_operar %}
             <nav class="dashboard-tabs" aria-label="Secciones del panel">
                 <button type="button" class="tab-button is-active" id="tab-btn-inventory" data-target="section-inventory">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -66,6 +66,7 @@
                     <span>Inventario</span>
                     <span class="tab-badge" id="badge-inventory-count">{{ articulos|length }}</span>
                 </button>
+                {% if es_admin %}
                 <button type="button" class="tab-button" id="tab-btn-users" data-target="section-users">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-2v6m-3-3h6" />
@@ -73,6 +74,7 @@
                     <span>Usuarios y Empleados</span>
                     <span class="tab-badge" id="badge-users-count">{{ usuarios_registrados|length }}</span>
                 </button>
+                {% endif %}
                 <button type="button" class="tab-button" id="tab-btn-movements" data-target="section-movements">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
@@ -97,6 +99,12 @@
                     <p class="welcome-message">Bienvenido, {{ usuario.usuario }}. Consulta y administra tus artículos.</p>
                 </div>
                 <div class="inventory-heading-actions">
+                    <button class="btn-add-user" id="open-stock-entry" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 21V9m-5 5 5-5 5 5M4 3h16" />
+                        </svg>
+                        <span>Ingresar existencias</span>
+                    </button>
                     <button class="btn-add-user" id="open-integrated-exit" type="button">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M4 7h10M4 12h7M4 17h10m3-8 3 3-3 3m3-3h-8" />
@@ -323,6 +331,7 @@
                         <select id="users-role-filter" class="category-filter-select" aria-label="Filtrar por rol">
                             <option value="">Todos los roles</option>
                             <option value="admin">Administradores</option>
+                            <option value="auxiliar">Auxiliares de inventarios</option>
                             <option value="empleado">Empleados / Usuarios</option>
                         </select>
                     </div>
@@ -336,8 +345,8 @@
                         data-id="{{ u.id_usuario }}"
                         data-username="{{ u.usuario }}"
                         data-fullname="{{ u.nombre_completo or '' }}"
-                        data-role="{{ 'admin' if u.es_admin else 'empleado' }}"
-                        data-role-label="{{ 'Administrador' if u.es_admin else 'Empleado' }}"
+                        data-role="{{ u.rol_clave }}"
+                        data-role-label="{{ u.rol_nombre }}"
                         data-email="{{ u.correo or '' }}"
                         data-identity="{{ u.numero_identidad or '' }}"
                         data-phone="{{ u.telefono or '' }}"
@@ -358,7 +367,7 @@
                                 <div class="user-card-title-row">
                                     <h3 class="user-card-name">{{ u.nombre_completo or u.usuario }}</h3>
                                     <span class="user-role-badge {% if u.es_admin %}user-role-badge--admin{% else %}user-role-badge--employee{% endif %}">
-                                        {{ 'Administrador' if u.es_admin else 'Empleado' }}
+                                        {{ u.rol_nombre }}
                                     </span>
                                 </div>
                                 <p class="user-card-username">@{{ u.usuario }}</p>
@@ -397,7 +406,9 @@
                 </div>
                 <p class="empty-search" id="empty-users-search" hidden>No se encontraron usuarios que coincidan con la búsqueda.</p>
             </div>
+            {% endif %}
 
+            {% if puede_operar %}
             <div id="section-movements" class="dashboard-tab-panel is-hidden">
                 <div class="movement-history" id="movement-history" data-movements-url="{{ url_for('inventario.listar_movimientos') }}">
                     <div class="inventory-heading movement-history-heading">
@@ -606,7 +617,7 @@
                 <div data-zf-field="serviceType" hidden><dt>Servicio</dt><dd></dd></div>
                 <div data-zf-field="serviceStatus" hidden><dt>Estado del servicio</dt><dd></dd></div>
             </dl>
-            {% if es_admin %}
+            {% if puede_operar %}
             <details class="service-editor" id="service-editor">
                 <summary>Cliente y estado del servicio</summary>
                 <form id="service-form">
@@ -723,6 +734,61 @@
             <p class="dialog-message" id="integrated-exit-message" role="status" aria-live="polite" hidden></p>
             <div class="admin-form-actions">
                 <button class="withdraw-button" id="integrated-exit-button" type="submit">Registrar salida</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog class="item-dialog admin-dialog" id="stock-entry-dialog" aria-labelledby="stock-entry-title">
+    <button class="dialog-close" id="close-stock-entry" type="button" aria-label="Cerrar ventana">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">ENTRADA DE MERCANCÍA</p>
+        <h2 id="stock-entry-title">Ingresar existencias</h2>
+        <p class="role-note">Busca el artículo aunque no recuerdes el código, elígelo y súbele la existencia. Así no se repiten códigos.</p>
+        <form id="stock-entry-form" enctype="multipart/form-data">
+            <div class="admin-form-grid">
+                <label class="admin-field admin-field--full" for="stock-entry-search">
+                    <span>Buscar por nombre o código</span>
+                    <input id="stock-entry-search" type="search" placeholder="Ej. kit" autocomplete="off">
+                </label>
+                <div class="admin-field--full stock-entry-results" id="stock-entry-results" role="list" hidden></div>
+                <p class="admin-field--full code-next" id="stock-entry-empty" hidden>No se encontró ningún artículo. Si es nuevo, un administrador debe crear su código con "Agregar artículo".</p>
+                <div class="admin-field--full stock-entry-selected" id="stock-entry-selected" hidden>
+                    <div>
+                        <strong id="stock-entry-selected-name"></strong>
+                        <small id="stock-entry-selected-info"></small>
+                    </div>
+                    <button class="btn-dialog-secondary" id="stock-entry-change" type="button">Cambiar</button>
+                </div>
+                <label class="admin-field" for="stock-entry-quantity">
+                    <span>Unidades a ingresar</span>
+                    <input id="stock-entry-quantity" name="cantidad" type="number" min="1" step="1" value="1" required>
+                </label>
+                <label class="admin-field" for="stock-entry-document">
+                    <span>Documento soporte</span>
+                    <input id="stock-entry-document" name="documento" type="file" accept="application/pdf,image/jpeg,image/png,image/webp">
+                    <small>PDF o imagen; máximo 5 MB.</small>
+                </label>
+                <label class="admin-field" for="stock-entry-operation">
+                    <span>Operación Sizfra</span>
+                    <input id="stock-entry-operation" name="operacion_sizfra" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 101" autocomplete="off">
+                </label>
+                <label class="admin-field" for="stock-entry-form-number">
+                    <span>Formulario</span>
+                    <input id="stock-entry-form-number" name="formulario" type="text" maxlength="24" placeholder="Ej. 1383926" autocomplete="off">
+                </label>
+                <label class="admin-field admin-field--full" for="stock-entry-notes">
+                    <span>Observaciones</span>
+                    <input id="stock-entry-notes" name="observaciones" type="text" maxlength="2000" autocomplete="off">
+                </label>
+            </div>
+            <p class="dialog-message" id="stock-entry-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="stock-entry-button" type="submit">Ingresar</button>
             </div>
         </form>
     </div>
@@ -881,8 +947,15 @@
                     <span>Contraseña</span>
                     <input id="new-user-password" name="contrasena" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
                 </label>
+                <label class="admin-field admin-field--full" for="new-user-role">
+                    <span>Perfil</span>
+                    <select id="new-user-role" name="rol">
+                        <option value="empleado">Empleado</option>
+                        <option value="auxiliar">Auxiliar de inventarios</option>
+                    </select>
+                </label>
             </div>
-            <p class="role-note">La cuenta se creará como usuario normal, sin permisos de administrador.</p>
+            <p class="role-note">El empleado ingresa y retira artículos. El auxiliar de inventarios además ve el historial, la trazabilidad y los reportes. Solo el administrador crea códigos de inventario y usuarios.</p>
             <p class="dialog-message" id="create-user-message" role="status" aria-live="polite" hidden></p>
             <div class="admin-form-actions">
                 <button class="withdraw-button" id="create-user-button" type="submit">Crear usuario</button>
@@ -904,7 +977,7 @@
             <div class="admin-form-grid">
                 <label class="admin-field" for="new-item-name">
                     <span>Nombre</span>
-                    <input id="new-item-name" name="nombre" type="text" maxlength="120" required>
+                    <input id="new-item-name" name="nombre" type="text" maxlength="120" autocomplete="off" required>
                 </label>
                 <div class="admin-field">
                     <label for="new-item-category"><span>Categoría</span></label>
@@ -923,6 +996,10 @@
                         </button>
                     </div>
                 </div>
+                <div class="admin-field--full similar-items" id="new-item-similar" hidden>
+                    <p><strong>¿Ya existe?</strong> Para no repetir códigos, súbele la existencia a uno de estos:</p>
+                    <div class="similar-items-list" id="new-item-similar-list"></div>
+                </div>
                 <label class="admin-field admin-field--full" for="new-item-description">
                     <span>Descripción</span>
                     <textarea id="new-item-description" name="descripcion" rows="3" maxlength="4000" required></textarea>
@@ -939,6 +1016,31 @@
                     <span>Ubicación</span>
                     <input id="new-item-location" name="ubicacion" type="text" maxlength="80" placeholder="Ej. Estante A1">
                 </label>
+                <p class="admin-field--full admin-form-section">Código consecutivo</p>
+                <div class="admin-field--full code-builder" id="new-item-code-builder" data-next-url="{{ url_for('inventario.siguiente_codigo') }}">
+                    <label class="admin-field" for="new-item-code-category">
+                        <span>Categoría del código</span>
+                        <select id="new-item-code-category" name="sigla_categoria">
+                            <option value="">Sin código consecutivo</option>
+                            {% for sigla, nombre in categorias_sigla.items() %}<option value="{{ sigla }}">{{ sigla }} · {{ nombre }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label class="admin-field" for="new-item-code-location">
+                        <span>Ubicación del código</span>
+                        <select id="new-item-code-location" name="sigla_ubicacion">
+                            <option value="">Elegir</option>
+                            {% for sigla, nombre in ubicaciones_sigla.items() %}<option value="{{ sigla }}">{{ sigla }} · {{ nombre }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label class="admin-field" for="new-item-code-type">
+                        <span>Tipo</span>
+                        <select id="new-item-code-type" name="tipo">
+                            <option value="">Elegir</option>
+                            {% for tipo in tipos_codigo %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                        </select>
+                    </label>
+                </div>
+                <p class="admin-field--full code-next" id="new-item-code-next" role="status" aria-live="polite">Elige categoría, ubicación y tipo para ver el código que sigue. La categoría y el grupo se toman de aquí.</p>
                 <p class="admin-field--full admin-form-section">Datos de zona franca (opcionales)</p>
                 <label class="admin-field" for="new-item-code">
                     <span>Código ZF</span>
@@ -1045,6 +1147,9 @@
     </div>
 </dialog>
 
+{% endif %}
+
+{% if puede_operar %}
 <dialog class="item-dialog admin-dialog" id="trace-dialog" aria-labelledby="trace-title">
     <button class="dialog-close" id="close-trace" type="button" aria-label="Cerrar trazabilidad">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1059,6 +1164,9 @@
         <ol class="trace-list" id="trace-list"></ol>
     </div>
 </dialog>
+{% endif %}
+
+{% if es_admin %}
 
 <dialog class="item-dialog admin-dialog" id="import-items-dialog" aria-labelledby="import-items-title">
     <button class="dialog-close" id="close-import-items" type="button" aria-label="Cerrar ventana">

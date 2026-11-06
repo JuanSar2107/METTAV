@@ -69,8 +69,8 @@ def test_crear_articulo_con_campos_zona_franca(client, app, admin, imagen_png):
             "nombre": "Bomba de aceite",
             "descripcion": "Bomba de aceite para reparación.",
             "stock": "1",
-            "codigo": "zf-maq-co-090",
-            "codigo_interno": "MAQ-BOD-CO-090",
+            "codigo": "zf-maq-co-001",
+            "codigo_interno": "MAQ-BOD-CO-001",
             "grupo": "4",
             "marca": "N/A",
             "subpartida": "8413.30.10.00",
@@ -83,8 +83,8 @@ def test_crear_articulo_con_campos_zona_franca(client, app, admin, imagen_png):
     )
     assert respuesta.status_code == 201
     with app.app_context():
-        articulo = ArticuloInventario.query.filter_by(codigo="ZF-MAQ-CO-090").one()
-        assert articulo.codigo_interno == "MAQ-BOD-CO-090"
+        articulo = ArticuloInventario.query.filter_by(codigo="ZF-MAQ-CO-001").one()
+        assert articulo.codigo_interno == "MAQ-BOD-CO-001"
         assert articulo.grupo == "004"
         assert articulo.marca is None
         assert articulo.subpartida == "8413.30.10.00"

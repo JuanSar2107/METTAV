@@ -37,6 +37,7 @@ def _respuesta_usuario(usuario: Usuario):
         "id_usuario": usuario.id_usuario,
         "usuario": usuario.usuario,
         "es_admin": usuario.es_admin,
+        "rol": usuario.rol_clave,
         "nombre_completo": usuario.nombre_completo or "",
         "correo": usuario.correo or "",
         "numero_identidad": usuario.numero_identidad or "",
@@ -82,7 +83,11 @@ def registrar_usuario():
     if Usuario.query.filter_by(usuario=nombre).first() is not None:
         return jsonify(error="Ese usuario ya está registrado."), 409
 
-    usuario = Usuario(usuario=nombre, es_admin=False)
+    rol = datos.get("rol") or "empleado"
+    if rol not in ("empleado", "auxiliar"):
+        return jsonify(error="El rol debe ser empleado o auxiliar de inventarios."), 400
+
+    usuario = Usuario(usuario=nombre, es_admin=False, es_auxiliar=rol == "auxiliar")
     usuario.establecer_contrasena(contrasena)
     db.session.add(usuario)
     try:
@@ -113,17 +118,19 @@ def listar_usuarios():
     filtros = []
     if texto:
         filtros.append(f"búsqueda \"{request.args['q'].strip()}\"")
-    if rol in ("admin", "empleado"):
-        filtros.append("solo administradores" if rol == "admin" else "solo empleados / usuarios")
+    nombres_rol = {"admin": "solo administradores", "auxiliar": "solo auxiliares de inventarios",
+                   "empleado": "solo empleados / usuarios"}
+    if rol in nombres_rol:
+        filtros.append(nombres_rol[rol])
 
     def coincide(u: Usuario) -> bool:
         contenido = " ".join(v or "" for v in (
             u.usuario, u.nombre_completo, u.correo, u.numero_identidad, u.telefono,
         )).lower()
         return ((not texto or texto in contenido)
-                and (rol not in ("admin", "empleado") or u.es_admin == (rol == "admin")))
+                and (rol not in nombres_rol or u.rol_clave == rol))
 
-    filas = [[u.usuario, u.nombre_completo, "Administrador" if u.es_admin else "Empleado", u.correo,
+    filas = [[u.usuario, u.nombre_completo, u.rol_nombre, u.correo,
               u.numero_identidad, u.telefono, u.direccion] for u in usuarios if coincide(u)]
     encabezados = ["Usuario", "Nombre completo", "Rol", "Correo", "Número de identidad", "Teléfono", "Dirección"]
     if formato == "xlsx":

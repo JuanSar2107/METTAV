@@ -252,6 +252,9 @@ class MovimientoInventario(db.Model):
     # Solo en salidas por remisión.
     id_remision = db.Column(db.Integer, db.ForeignKey("remisiones.id"))
     remision = db.relationship("Remision")
+    # Documento soporte del ingreso: nombre en disco y nombre original del archivo.
+    documento_archivo = db.Column(db.String(80))
+    documento_nombre = db.Column(db.String(200))
 
     def to_dict(self):
         fecha_hora = self.fecha_hora
@@ -277,6 +280,8 @@ class MovimientoInventario(db.Model):
             "origen": self.origen,
             "observaciones": self.observaciones,
             "id_remision": self.id_remision,
+            "documento_nombre": self.documento_nombre,
+            "documento_url": f"/api/inventario/movimientos/{self.id}/documento" if self.documento_archivo else None,
         }
 
 

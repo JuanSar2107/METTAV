@@ -86,6 +86,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         SQLALCHEMY_DATABASE_URI=url_base_de_datos(database_path),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
+        # Documentos soporte de los ingresos: privados, fuera de /static y dentro
+        # de instance/, que en Docker es un volumen persistente.
+        DOCUMENTOS_FOLDER=str(database_path.parent / "documentos"),
     )
     if test_config is not None:
         app.config.update(test_config)
@@ -116,6 +119,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         user_columns = {column["name"] for column in inspect(db.engine).get_columns("usuarios")}
         user_migrations = {
             "es_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "es_auxiliar": "BOOLEAN NOT NULL DEFAULT FALSE",
             "nombre_completo": "VARCHAR(120)",
             "correo": "VARCHAR(254)",
             "numero_identidad": "VARCHAR(32)",
@@ -164,6 +168,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             "origen": "VARCHAR(20)",
             "observaciones": "TEXT",
             "id_remision": "INTEGER REFERENCES remisiones (id)",
+            "documento_archivo": "VARCHAR(80)",
+            "documento_nombre": "VARCHAR(200)",
         }
         missing_movement_columns = {
             column_name: column_type

@@ -10,7 +10,14 @@ import unicodedata
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from mi_app.models.inventory import GRUPOS_INVENTARIO, PROCEDENCIAS
+from mi_app.extensions import db
+from mi_app.models.inventory import (
+    GRUPOS_INVENTARIO,
+    PROCEDENCIAS,
+    ArticuloInventario,
+    MovimientoInventario,
+    RegistroAuditoria,
+)
 
 # Siglas que usa el Excel en las columnas de categoría y ubicación.
 CATEGORIAS_SIGLA = {
@@ -29,6 +36,10 @@ UBICACIONES_SIGLA = {
     "APT": "Apartamento",
 }
 
+# Tipos que usa el Excel de inventario en la columna "Tipo (PR/CO/AR)".
+TIPOS_CODIGO = ("CO", "PR", "AR")
+
+_RE_CODIGO_ZF = re.compile(r"^ZF-([A-Z]+)-([A-Z]+)-(\d+)$")
 _RE_CODIGO = re.compile(r"^[A-Z0-9][A-Z0-9-]*$")
 _RE_SUBPARTIDA = re.compile(r"^\d{4}(\.?\d{2}){0,3}$")
 _RE_MILES = re.compile(r"^\d{1,3}(\.\d{3})+$")
@@ -164,6 +175,41 @@ def campos_trazabilidad(datos) -> dict:
     campos["fecha_ingreso"] = leer_fecha(datos.get("fecha_ingreso"))
     campos["fecha_retiro"] = leer_fecha(datos.get("fecha_retiro"))
     return campos
+
+
+def siguiente_consecutivo(categoria: str, tipo: str) -> int:
+    """El número que sigue para ZF-<categoría>-<tipo>-NNN: el mayor usado + 1.
+
+    También cuenta los códigos que solo quedan en el historial o la auditoría,
+    para no reutilizar el código de un artículo eliminado y mezclar su trazabilidad.
+    """
+    prefijo = f"ZF-{categoria}-{tipo}-"
+    usados = 0
+    for columna in (ArticuloInventario.codigo, MovimientoInventario.codigo_articulo, RegistroAuditoria.codigo_articulo):
+        for (codigo,) in db.session.query(columna).filter(columna.like(f"{prefijo}%")):
+            sufijo = codigo[len(prefijo):]
+            if sufijo.isdigit():
+                usados = max(usados, int(sufijo))
+    return usados + 1
+
+
+def codigos_siguientes(categoria: str, ubicacion: str, tipo: str) -> tuple[str, str]:
+    """(código ZF, código interno) que siguen, con las mismas fórmulas del Excel."""
+    if categoria not in CATEGORIAS_SIGLA or ubicacion not in UBICACIONES_SIGLA or tipo not in TIPOS_CODIGO:
+        raise ValueError("Elige la categoría, la ubicación y el tipo del código.")
+    numero = siguiente_consecutivo(categoria, tipo)
+    return f"ZF-{categoria}-{tipo}-{numero:03d}", f"{categoria}-{ubicacion}-{tipo}-{numero:03d}"
+
+
+def validar_sin_salto(codigo: str) -> None:
+    """Un código ZF escrito a mano no puede saltarse el consecutivo (205 -> 300)."""
+    coincidencia = _RE_CODIGO_ZF.match(codigo)
+    if coincidencia is None:
+        return
+    categoria, tipo, numero = coincidencia.groups()
+    siguiente = siguiente_consecutivo(categoria, tipo)
+    if int(numero) > siguiente:
+        raise ValueError(f"El código se salta el consecutivo: el siguiente es ZF-{categoria}-{tipo}-{siguiente:03d}.")
 
 
 def normalizar_codigo(texto: str) -> str:

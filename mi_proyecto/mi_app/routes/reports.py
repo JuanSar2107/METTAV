@@ -26,8 +26,8 @@ def _error_admin():
     usuario = usuario_actual()
     if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
-    if not usuario.es_admin:
-        return jsonify(error="Solo un administrador puede ver los reportes."), 403
+    if not usuario.puede_operar:
+        return jsonify(error="No tienes permiso para ver los reportes."), 403
     return None
 
 

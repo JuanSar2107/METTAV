@@ -1398,6 +1398,121 @@ body {
     line-height: 1.45;
 }
 
+.code-builder {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.code-next {
+    margin: 0;
+    color: #526b80;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.similar-items {
+    padding: 10px 12px;
+    border-left: 3px solid #b07a12;
+    border-radius: 6px;
+    background: rgba(214, 160, 40, 0.1);
+    color: #274765;
+    font-size: 13px;
+}
+
+.admin-field[hidden],
+.similar-items[hidden],
+.stock-entry-results[hidden],
+.stock-entry-selected[hidden] {
+    display: none;
+}
+
+.similar-items p {
+    margin: 0 0 8px;
+}
+
+.similar-items-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.similar-items-list .btn-dialog-secondary {
+    min-height: 34px;
+    padding: 4px 10px;
+    font-size: 12px;
+    text-align: left;
+}
+
+.stock-entry-results {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.stock-entry-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(39, 71, 101, 0.2);
+    border-radius: 6px;
+    background: #fff;
+    color: #194065;
+    font: 600 14px 'Barlow', sans-serif;
+    text-align: left;
+    cursor: pointer;
+}
+
+.stock-entry-option:hover,
+.stock-entry-option:focus-visible {
+    border-color: var(--blue);
+    background: #edf4f8;
+}
+
+.stock-entry-option small,
+.stock-entry-selected small {
+    color: #6a8092;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.stock-entry-selected {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    background: #edf4f8;
+    color: #194065;
+}
+
+.stock-entry-selected div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.document-link {
+    display: block;
+    margin-top: 3px;
+    color: var(--blue);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .code-builder {
+        grid-template-columns: 1fr;
+    }
+}
+
 .service-label {
     position: absolute;
     top: 10px;

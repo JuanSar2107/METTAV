@@ -78,6 +78,7 @@ def _linea_movimiento(m: MovimientoInventario) -> str:
         ("rol", m.rol),
         ("remisión", m.remision.numero if m.remision else None),
         ("observaciones", m.observaciones),
+        ("documento soporte", m.documento_nombre),
     ])
     return f"{linea} | {detalles}" if detalles else linea
 
@@ -86,7 +87,8 @@ def _contexto_inventario(usuario: Usuario) -> str:
     """Resume en texto los datos del sistema que el usuario tiene permiso de ver.
 
     Cualquier usuario ve el inventario (igual que en el panel); el historial,
-    las salidas integradas, las remisiones y la auditoría son de administradores.
+    las salidas integradas, las remisiones y la auditoría son de administradores
+    y auxiliares de inventarios; los usuarios, solo de administradores.
     """
     articulos = (
         ArticuloInventario.query.order_by(ArticuloInventario.grupo, ArticuloInventario.codigo)
@@ -101,7 +103,7 @@ def _contexto_inventario(usuario: Usuario) -> str:
     ]
     lineas += [_linea_articulo(a) for a in articulos] or ["- (sin artículos registrados)"]
 
-    if not usuario.es_admin:
+    if not usuario.puede_operar:
         return "\n".join(lineas)
 
     resumen = (
@@ -171,19 +173,20 @@ def _contexto_inventario(usuario: Usuario) -> str:
         for r in auditoria
     ] or ["- (sin registros)"]
 
-    total_usuarios = db.session.query(Usuario.id_usuario).count()
-    total_admins = db.session.query(Usuario.id_usuario).filter(Usuario.es_admin.is_(True)).count()
-    lineas += ["", f"USUARIOS: {total_usuarios} registrados, {total_admins} administradores."]
+    if usuario.es_admin:
+        total_usuarios = db.session.query(Usuario.id_usuario).count()
+        total_admins = db.session.query(Usuario.id_usuario).filter(Usuario.es_admin.is_(True)).count()
+        lineas += ["", f"USUARIOS: {total_usuarios} registrados, {total_admins} administradores."]
     return "\n".join(lineas)
 
 
 def _instrucciones(usuario: Usuario) -> str:
-    rol = "administrador" if usuario.es_admin else "empleado"
+    rol = usuario.rol_nombre.lower()
     alcance = (
         "Tienes el inventario, el historial de movimientos, las salidas integradas, las remisiones y la auditoría."
-        if usuario.es_admin
+        if usuario.puede_operar
         else "Solo tienes el inventario actual; el historial, las salidas integradas, las remisiones y la "
-             "auditoría son de administradores: si te preguntan por eso, explícalo amablemente."
+             "auditoría son de administradores y auxiliares: si te preguntan por eso, explícalo amablemente."
     )
     return (
         "Eres el asistente virtual de METTAV Group SAS, empresa ubicada en la Zona Franca Permanente "
@@ -201,6 +204,8 @@ def _instrucciones(usuario: Usuario) -> str:
         "- Una remisión de salida (REM-0001...) es la entrega de mercancía a un cliente; cada artículo queda "
         "con un estado del servicio: recibido, en servicio, terminado, entregado o cancelado.\n"
         "- 'Stock más alto' es solo informativo: los ingresos no tienen tope.\n"
+        "- Solo un administrador crea códigos de inventario, y salen consecutivos (después del 205 sigue el 206). "
+        "Para subir la existencia de algo que ya existe se usa 'Ingresar existencias', sin crear otro código.\n"
         "Responde siempre en español, de forma breve y clara, en texto plano sin formato Markdown (puedes "
         "usar guiones para listas). Para preguntas sobre el inventario usa ÚNICAMENTE los datos de abajo; si "
         "algo no está en ellos, dilo en lugar de inventarlo, y si la respuesta puede estar en registros más "
