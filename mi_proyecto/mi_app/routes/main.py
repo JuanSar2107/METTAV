@@ -1,8 +1,12 @@
-from flask import Blueprint, current_app, jsonify, redirect, render_template, session, url_for
+from pathlib import Path
+
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, send_file, session, url_for
 
 from mi_app.extensions import db
 from mi_app.security import usuario_actual
 from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
+from mi_app.models.inventory import ESTADOS_SERVICIO, GRUPOS_INVENTARIO, PROCESOS_INTEGRACION, TIPOS_SERVICIO
+from mi_app.zona_franca import CATEGORIAS_SIGLA, TIPOS_CODIGO, UBICACIONES_SIGLA
 
 main_bp = Blueprint('main', __name__)
 
@@ -11,7 +15,7 @@ _DESCRIPCIONES_RUTAS = {
     "main.dashboard": "Muestra el inventario del usuario autenticado.",
     "main.docs": "Devuelve la documentación JSON de todas las rutas registradas.",
     "usuarios.registrar_usuario": "Crea una cuenta de usuario normal; requiere sesión de administrador.",
-    "usuarios.listar_usuarios": "Devuelve la lista de usuarios y empleados registrados; requiere sesión de administrador.",
+    "usuarios.listar_usuarios": "Devuelve la lista de usuarios y empleados registrados; con ?formato=xlsx o pdf la descarga con los filtros q y rol; requiere sesión de administrador.",
     "usuarios.iniciar_sesion": "Valida las credenciales y crea la sesión del usuario.",
     "usuarios.cerrar_sesion": "Cierra la sesión actual.",
     "usuarios.obtener_usuario_actual": "Devuelve los datos del usuario autenticado.",
@@ -19,9 +23,25 @@ _DESCRIPCIONES_RUTAS = {
     "usuarios.actualizar_usuario_actual": "Actualiza el nombre de usuario o la contraseña propios.",
     "usuarios.eliminar_usuario_actual": "Elimina la cuenta autenticada y cierra su sesión.",
     "inventario.crear_articulo": "Crea un artículo del inventario; requiere sesión de administrador.",
+    "inventario.importar_excel": "Crea o actualiza artículos desde el Excel de inventario (por código ZF); requiere sesión de administrador.",
     "inventario.eliminar_articulo": "Elimina un artículo; requiere sesión de administrador.",
     "inventario.retirar_articulo": "Retira unidades del stock de un artículo autenticado.",
-    "inventario.listar_movimientos": "Lista los retiros de inventario; requiere sesión de administrador.",
+    "inventario.crear_salida_integrada": "Da de baja en un solo registro un equipo y las partes que se le integraron; requiere sesión.",
+    "inventario.obtener_salida_integrada": "Devuelve una salida integrada con el equipo y sus partes; requiere sesión.",
+    "reportes.reporte_inventario": "Reporte del inventario por grupo, categoría o texto (JSON o ?formato=xlsx); requiere sesión de administrador.",
+    "reportes.reporte_movimientos": "Reporte de ingresos y retiros por rango de fechas (JSON o ?formato=xlsx); requiere sesión de administrador.",
+    "reportes.reporte_salidas_integradas": "Reporte de salidas integradas por rango de fechas (JSON o ?formato=xlsx); requiere sesión de administrador.",
+    "reportes.conciliacion": "Compara un reporte exportado de Sizfra con el stock de la app; requiere sesión de administrador.",
+    "inventario.actualizar_servicio": "Cambia el cliente, el tipo o el estado del servicio de un artículo; requiere sesión de administrador.",
+    "remisiones.crear_remision": "Crea una remisión de salida y da de baja la mercancía; requiere sesión.",
+    "remisiones.listar_remisiones": "Lista las remisiones por fecha o cliente; requiere sesión.",
+    "remisiones.ver_remision": "Muestra la remisión lista para imprimir o guardar como PDF; requiere sesión.",
+    "main.manual_usuario": "Descarga el manual de usuario en PDF; requiere sesión.",
+    "inventario.actualizar_articulo": "Corrige los datos y la imagen de un artículo, sin cambiar su código ni su stock; requiere sesión de administrador.",
+    "inventario.siguiente_codigo": "Devuelve el código ZF e interno que siguen en el consecutivo; requiere sesión de administrador.",
+    "inventario.descargar_documento": "Descarga el documento soporte de un ingreso; requiere sesión de administrador o auxiliar.",
+    "inventario.trazabilidad_articulo": "Devuelve los movimientos y la auditoría de un código, aunque el artículo se haya eliminado; requiere sesión de administrador.",
+    "inventario.listar_movimientos": "Lista los movimientos de inventario; con ?formato=xlsx o pdf los descarga con los filtros q, categoria y dia; requiere sesión de administrador.",
     "inventario.listar_categorias": "Devuelve la lista de categorías registradas.",
     "inventario.crear_categoria": "Crea una nueva categoría; requiere sesión de administrador.",
     "asistente.consultar_asistente": "Responde preguntas con Gemini usando el inventario como contexto; requiere sesión.",
@@ -129,9 +149,28 @@ def dashboard():
         usuario=usuario,
         articulos=articulos,
         categorias=categorias,
+        grupos_inventario=GRUPOS_INVENTARIO,
+        procesos_integracion=PROCESOS_INTEGRACION,
+        tipos_servicio=TIPOS_SERVICIO,
+        estados_servicio=ESTADOS_SERVICIO,
         usuarios_registrados=usuarios_registrados,
         es_admin=usuario.es_admin,
+        puede_operar=usuario.puede_operar,
+        categorias_sigla=CATEGORIAS_SIGLA,
+        ubicaciones_sigla=UBICACIONES_SIGLA,
+        tipos_codigo=TIPOS_CODIGO,
     )
+
+
+@main_bp.get('/manual-de-usuario')
+def manual_usuario():
+    """Descarga el manual de usuario en PDF; requiere sesión."""
+    if usuario_actual() is None:
+        return redirect(url_for('main.login'))
+    ruta = Path(current_app.root_path) / "recursos" / "Manual-de-usuario-METTAV.pdf"
+    if not ruta.is_file():
+        abort(404)
+    return send_file(ruta, mimetype="application/pdf", as_attachment=True, download_name=ruta.name)
 
 
 @main_bp.get('/docs')

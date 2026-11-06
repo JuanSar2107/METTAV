@@ -86,6 +86,129 @@ def test_asistente_incluye_movimientos_para_admin(client, gemini_falso, creador_
     assert "ÚLTIMOS MOVIMIENTOS" in gemini_falso[0]["instrucciones"]
 
 
+@pytest.fixture()
+def operacion_zona_franca(app):
+    """Un banco con datos de Sizfra, una parte, una salida integrada y una remisión."""
+    from datetime import date
+    from decimal import Decimal
+
+    from mi_app.extensions import db
+    from mi_app.models import ArticuloInventario
+
+    with app.app_context():
+        articulos = [
+            ArticuloInventario(
+                codigo="ZF-MAQ-CO-001", codigo_interno="MAQ-BOD-CO-001", nombre="Banco hidráulico",
+                categoria="Maquinaria", descripcion="Banco", grupo="002", stock=2, stock_maximo=2,
+                unidad="unidades", ubicacion="Bodega", imagen_url="x.png", subpartida="8413301000",
+                valor_fob_usd=Decimal("80.00"), serial="B-77", responsable="Operativos",
+                fecha_ingreso=date(2026, 5, 8),
+            ),
+            ArticuloInventario(
+                codigo="ZF-MAQ-CO-090", nombre="Kit de accesorios", categoria="Maquinaria", descripcion="Kit",
+                grupo="002", stock=3, stock_maximo=3, unidad="unidades", ubicacion="Bodega", imagen_url="x.png",
+            ),
+            ArticuloInventario(
+                codigo="SER-2026-BOM", nombre="Bomba de aceite", categoria="Maquinaria", descripcion="Bomba",
+                grupo="004", stock=1, stock_maximo=1, unidad="unidades", ubicacion="Bodega", imagen_url="x.png",
+                cliente="MOTORKAM", tipo_servicio="Reparación", estado_servicio="En servicio",
+            ),
+        ]
+        db.session.add_all(articulos)
+        db.session.commit()
+        return [a.id for a in articulos]
+
+
+def _registrar_operaciones(client, ids):
+    banco, kit, bomba = ids
+    client.post("/api/inventario/salidas-integradas", json={
+        "principal": {"id": banco, "cantidad": 1},
+        "componentes": [{"id": kit, "cantidad": 2}],
+        "proceso": "Reparación",
+        "formulario": "1383926",
+    })
+    client.post("/api/remisiones", json={
+        "cliente_nombre": "MOTORKAM COMPANY S.A.S", "cliente_nit": "900.059.427-0",
+        "lineas": [{"id": bomba, "cantidad": 1, "estado_servicio": "Entregado"}],
+    })
+
+
+def test_asistente_admin_conoce_zona_franca_salidas_y_remisiones(
+    client, gemini_falso, creador_usuarios, iniciar_sesion, operacion_zona_franca
+):
+    creador_usuarios("jefe", es_admin=True, nombre_completo="Jefa de Bodega")
+    iniciar_sesion("jefe")
+    _registrar_operaciones(client, operacion_zona_franca)
+
+    client.post("/api/asistente/", json={"pregunta": "¿Qué partes se integraron al banco?"})
+    contexto = gemini_falso[0]["instrucciones"]
+    # Conceptos de zona franca en las instrucciones.
+    assert "Sizfra" in contexto and "004 mercancía de clientes" in contexto
+    # Datos del artículo.
+    assert "ZF-MAQ-CO-001 | Banco hidráulico | grupo 002" in contexto
+    assert "interno MAQ-BOD-CO-001" in contexto
+    assert "FOB USD 80.00" in contexto
+    assert "serial B-77" in contexto
+    # Salida integrada con su equipo y su parte.
+    assert "Salida #1" in contexto
+    assert "equipo: ZF-MAQ-CO-001 · Banco hidráulico" in contexto
+    assert "parte: 2 unidades Kit de accesorios (ZF-MAQ-CO-090)" in contexto
+    # Remisión y estado del servicio.
+    assert "REM-0001" in contexto and "cliente MOTORKAM COMPANY S.A.S" in contexto
+    assert "estado del servicio Entregado" in contexto
+    # Movimientos con datos de Sizfra y auditoría.
+    assert "formulario 1383926" in contexto
+    assert "origen Remisión" in contexto
+    assert "RESUMEN POR GRUPO DE SIZFRA" in contexto
+    assert "REGISTROS DE AUDITORÍA" in contexto
+
+
+def test_asistente_empleado_no_recibe_historial_ni_remisiones(
+    client, gemini_falso, creador_usuarios, iniciar_sesion, operacion_zona_franca
+):
+    creador_usuarios("jefe", es_admin=True)
+    iniciar_sesion("jefe")
+    _registrar_operaciones(client, operacion_zona_franca)
+    client.post("/api/logout")
+
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    client.post("/api/asistente/", json={"pregunta": "¿Qué se le entregó a MOTORKAM?"})
+    contexto = gemini_falso[0]["instrucciones"]
+    # El inventario sí (como en el panel), con su estado del servicio...
+    assert "SER-2026-BOM" in contexto
+    assert "estado del servicio Entregado" in contexto
+    # ...pero nada del historial, las salidas, las remisiones ni la auditoría.
+    for seccion in ("MOVIMIENTOS", "SALIDAS INTEGRADAS", "REMISIONES DE SALIDA", "AUDITORÍA", "cliente MOTORKAM COMPANY"):
+        assert seccion not in contexto
+    assert "son de administradores" in contexto
+
+
+def test_asistente_avisa_cuando_el_inventario_supera_el_limite(
+    client, app, gemini_falso, creador_usuarios, iniciar_sesion, monkeypatch
+):
+    from mi_app.extensions import db
+    from mi_app.models import ArticuloInventario
+    from mi_app.routes import assistant
+
+    monkeypatch.setattr(assistant, "_MAX_ARTICULOS", 2)
+    with app.app_context():
+        db.session.add_all(
+            ArticuloInventario(
+                codigo=f"ZF-OT-CO-{i:03d}", nombre=f"Ítem {i}", categoria="Otros", descripcion="x",
+                stock=1, stock_maximo=1, unidad="unidades", ubicacion="Bodega", imagen_url="x.png",
+            )
+            for i in range(3)
+        )
+        db.session.commit()
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    client.post("/api/asistente/", json={"pregunta": "¿Cuántos ítems hay?"})
+    contexto = gemini_falso[0]["instrucciones"]
+    assert "3 artículos, se muestran los primeros 2" in contexto
+    assert "ZF-OT-CO-002" not in contexto
+
+
 def test_asistente_error_de_gemini_responde_502(client, con_clave, monkeypatch, creador_usuarios, iniciar_sesion):
     def _falla(*_args):
         raise gemini.GeminiError("La clave GEMINI_API_KEY no es válida.")

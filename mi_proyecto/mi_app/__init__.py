@@ -86,6 +86,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         SQLALCHEMY_DATABASE_URI=url_base_de_datos(database_path),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=5 * 1024 * 1024,
+        # Documentos soporte de los ingresos: privados, fuera de /static y dentro
+        # de instance/, que en Docker es un volumen persistente.
+        DOCUMENTOS_FOLDER=str(database_path.parent / "documentos"),
     )
     if test_config is not None:
         app.config.update(test_config)
@@ -101,9 +104,13 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .routes.inventory import inventario_bp
     from .routes.users import usuarios_bp
     from .routes.assistant import asistente_bp
+    from .routes.reports import reportes_bp
+    from .routes.remissions import remisiones_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(inventario_bp)
+    app.register_blueprint(reportes_bp)
+    app.register_blueprint(remisiones_bp)
     app.register_blueprint(usuarios_bp)
     app.register_blueprint(asistente_bp)
 
@@ -112,6 +119,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         user_columns = {column["name"] for column in inspect(db.engine).get_columns("usuarios")}
         user_migrations = {
             "es_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "es_auxiliar": "BOOLEAN NOT NULL DEFAULT FALSE",
             "nombre_completo": "VARCHAR(120)",
             "correo": "VARCHAR(254)",
             "numero_identidad": "VARCHAR(32)",
@@ -151,6 +159,29 @@ def create_app(test_config: dict | None = None) -> Flask:
                         "ADD COLUMN tipo VARCHAR(16) NOT NULL DEFAULT 'Retiro'"
                     )
                 )
+        # Operación/formulario de Sizfra y enlace a las salidas integradas.
+        movement_migrations = {
+            "operacion_sizfra": "VARCHAR(6)",
+            "formulario": "VARCHAR(24)",
+            "id_salida": "INTEGER REFERENCES salidas_integradas (id)",
+            "rol": "VARCHAR(12)",
+            "origen": "VARCHAR(20)",
+            "observaciones": "TEXT",
+            "id_remision": "INTEGER REFERENCES remisiones (id)",
+            "documento_archivo": "VARCHAR(80)",
+            "documento_nombre": "VARCHAR(200)",
+        }
+        missing_movement_columns = {
+            column_name: column_type
+            for column_name, column_type in movement_migrations.items()
+            if column_name not in movement_columns
+        }
+        if missing_movement_columns:
+            with db.engine.begin() as connection:
+                for column_name, column_type in missing_movement_columns.items():
+                    connection.execute(
+                        text(f"ALTER TABLE movimientos_inventario ADD COLUMN {column_name} {column_type}")
+                    )
 
         article_columns = {
             column["name"]
@@ -178,6 +209,39 @@ def create_app(test_config: dict | None = None) -> Flask:
                         "AND tipo = 'Retiro'), 0))"
                     )
                 )
+
+        # Campos de zona franca (código interno, grupo Sizfra, datos aduaneros).
+        article_migrations = {
+            "codigo_interno": "VARCHAR(32)",
+            "grupo": "VARCHAR(3)",
+            "tipo": "VARCHAR(8)",
+            "marca": "VARCHAR(80)",
+            "subpartida": "VARCHAR(20)",
+            "valor_fob_usd": "NUMERIC(14, 2)",
+            "procedencia": "VARCHAR(20)",
+            "estado": "VARCHAR(40)",
+            "serial": "VARCHAR(80)",
+            "responsable": "VARCHAR(120)",
+            "fecha_ingreso": "DATE",
+            "documento_soporte": "VARCHAR(160)",
+            "fecha_retiro": "DATE",
+            "documento_retiro": "VARCHAR(160)",
+            "razon_retiro": "TEXT",
+            "cliente": "VARCHAR(160)",
+            "tipo_servicio": "VARCHAR(30)",
+            "estado_servicio": "VARCHAR(20)",
+        }
+        missing_article_columns = {
+            column_name: column_type
+            for column_name, column_type in article_migrations.items()
+            if column_name not in article_columns
+        }
+        if missing_article_columns:
+            with db.engine.begin() as connection:
+                for column_name, column_type in missing_article_columns.items():
+                    connection.execute(
+                        text(f"ALTER TABLE articulos_inventario ADD COLUMN {column_name} {column_type}")
+                    )
 
         indexes = inspect(db.engine).get_indexes("usuarios")
         constraints = inspect(db.engine).get_unique_constraints("usuarios")

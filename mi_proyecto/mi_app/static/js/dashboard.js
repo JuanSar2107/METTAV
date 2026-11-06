@@ -159,7 +159,7 @@
             : "";
 
         cards.forEach((card) => {
-            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.category || ""}`);
+            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.internalCode || ""} ${card.dataset.category || ""}`);
             const cardCategory = normalizeSearchText((card.dataset.category || "").trim());
 
             const matchesQuery = !query || content.includes(query);
@@ -272,6 +272,468 @@
         });
     }
 
+    const importDialog = document.querySelector("#import-items-dialog");
+    const importOpenButton = document.querySelector("#open-import-items");
+    const importForm = document.querySelector("#import-items-form");
+
+    if (
+        importDialog instanceof HTMLDialogElement &&
+        importOpenButton instanceof HTMLButtonElement &&
+        importForm instanceof HTMLFormElement
+    ) {
+        const importMessage = document.querySelector("#import-items-message");
+        const importErrors = document.querySelector("#import-items-errors");
+        const importButton = document.querySelector("#import-items-button");
+        let importDone = false;
+
+        importOpenButton.addEventListener("click", () => importDialog.showModal());
+        document.querySelector("#close-import-items").addEventListener("click", () => importDialog.close());
+        importDialog.addEventListener("click", (event) => {
+            if (event.target === importDialog) {
+                importDialog.close();
+            }
+        });
+        // Al cerrar después de importar se recarga para ver los artículos nuevos.
+        importDialog.addEventListener("close", () => {
+            if (importDone) {
+                window.location.reload();
+            }
+        });
+
+        importForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            importButton.disabled = true;
+            importMessage.hidden = true;
+            importErrors.hidden = true;
+            importErrors.replaceChildren();
+            try {
+                const response = await fetch(importForm.dataset.importUrl, {
+                    method: "POST",
+                    body: new FormData(importForm),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || "No se pudo importar el archivo.");
+                }
+                importDone = result.creados + result.actualizados > 0;
+                const avisos = result.avisos || [];
+                importMessage.textContent = `Importación lista: ${result.creados} creados, ${result.actualizados} actualizados`
+                    + (result.errores.length ? `, ${result.errores.length} filas con error` : "")
+                    + (avisos.length ? `, ${avisos.length} avisos` : "") + ".";
+                importMessage.dataset.state = result.errores.length ? "error" : "success";
+                importMessage.hidden = false;
+                [...result.errores, ...avisos].forEach((fila) => {
+                    const item = document.createElement("li");
+                    item.textContent = `Fila ${fila.fila}${fila.codigo ? ` (${fila.codigo})` : ""}: ${fila.error || `aviso, ${fila.aviso}`}`;
+                    importErrors.append(item);
+                });
+                importErrors.hidden = result.errores.length + avisos.length === 0;
+            } catch (error) {
+                importMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                importMessage.dataset.state = "error";
+                importMessage.hidden = false;
+            } finally {
+                importButton.disabled = false;
+            }
+        });
+    }
+
+    const exitDialog = document.querySelector("#integrated-exit-dialog");
+    const exitOpenButton = document.querySelector("#open-integrated-exit");
+    const exitForm = document.querySelector("#integrated-exit-form");
+
+    if (
+        exitDialog instanceof HTMLDialogElement &&
+        exitOpenButton instanceof HTMLButtonElement &&
+        exitForm instanceof HTMLFormElement
+    ) {
+        const exitParts = document.querySelector("#integrated-exit-parts");
+        const exitMessage = document.querySelector("#integrated-exit-message");
+        const exitButton = document.querySelector("#integrated-exit-button");
+        const principalLine = exitForm.querySelector('[data-line="principal"]');
+        // "ZF-MAQ-CO-001 · Banco" -> tarjeta del artículo, para saber su id y stock.
+        const cardsByLabel = new Map(
+            [...document.querySelectorAll(".inventory-card")].map((card) => [
+                `${card.dataset.code} · ${card.dataset.name}`,
+                card,
+            ]),
+        );
+
+        const addPartLine = () => {
+            const line = document.createElement("div");
+            line.className = "exit-line";
+            line.dataset.line = "parte";
+            const article = document.createElement("input");
+            article.type = "text";
+            article.setAttribute("list", "integrated-exit-articles");
+            article.placeholder = "Parte: código o nombre";
+            article.setAttribute("aria-label", "Parte integrada");
+            article.autocomplete = "off";
+            const quantity = document.createElement("input");
+            quantity.type = "number";
+            quantity.min = "1";
+            quantity.step = "1";
+            quantity.value = "1";
+            quantity.setAttribute("aria-label", "Cantidad de la parte");
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "exit-line-remove";
+            remove.textContent = "Quitar";
+            remove.setAttribute("aria-label", "Quitar parte");
+            remove.addEventListener("click", () => line.remove());
+            line.append(article, quantity, remove);
+            exitParts.append(line);
+            article.focus();
+        };
+
+        const readLine = (line) => {
+            const [article, quantity] = line.querySelectorAll("input");
+            const label = article.value.trim();
+            if (!label) {
+                return null;
+            }
+            const card = cardsByLabel.get(label);
+            if (!card) {
+                throw new Error(`"${label}" no es un artículo del inventario. Elígelo de la lista.`);
+            }
+            const cantidad = Number(quantity.value);
+            if (!Number.isInteger(cantidad) || cantidad < 1) {
+                throw new Error(`Indica una cantidad válida para ${card.dataset.code}.`);
+            }
+            if (cantidad > Number(card.dataset.stock)) {
+                throw new Error(`Solo hay ${card.dataset.stock} ${card.dataset.unit} de ${card.dataset.code}.`);
+            }
+            return { id: Number(card.dataset.id), cantidad };
+        };
+
+        exitOpenButton.addEventListener("click", () => {
+            exitForm.reset();
+            exitParts.replaceChildren();
+            exitMessage.hidden = true;
+            addPartLine();
+            exitDialog.showModal();
+        });
+        document.querySelector("#close-integrated-exit").addEventListener("click", () => exitDialog.close());
+        exitDialog.addEventListener("click", (event) => {
+            if (event.target === exitDialog) {
+                exitDialog.close();
+            }
+        });
+        document.querySelector("#integrated-exit-add-part").addEventListener("click", addPartLine);
+
+        exitForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            exitMessage.hidden = true;
+            let payload;
+            try {
+                const componentes = [...exitParts.querySelectorAll(".exit-line")].map(readLine).filter(Boolean);
+                if (componentes.length === 0) {
+                    throw new Error("Agrega al menos una parte integrada.");
+                }
+                const formData = new FormData(exitForm);
+                payload = {
+                    principal: readLine(principalLine),
+                    componentes,
+                    proceso: formData.get("proceso"),
+                    referencia: formData.get("referencia"),
+                    operacion_sizfra: formData.get("operacion_sizfra"),
+                    formulario: formData.get("formulario"),
+                    observaciones: formData.get("observaciones"),
+                };
+            } catch (error) {
+                exitMessage.textContent = error.message;
+                exitMessage.dataset.state = "error";
+                exitMessage.hidden = false;
+                return;
+            }
+
+            exitButton.disabled = true;
+            try {
+                const response = await fetch(exitForm.dataset.exitUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || "No se pudo registrar la salida.");
+                }
+                exitDialog.close();
+                window.location.reload();
+            } catch (error) {
+                exitMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                exitMessage.dataset.state = "error";
+                exitMessage.hidden = false;
+                exitButton.disabled = false;
+            }
+        });
+    }
+
+    const remissionDialog = document.querySelector("#remission-dialog");
+    const remissionOpenButton = document.querySelector("#open-remission");
+    const remissionForm = document.querySelector("#remission-form");
+
+    if (
+        remissionDialog instanceof HTMLDialogElement &&
+        remissionOpenButton instanceof HTMLButtonElement &&
+        remissionForm instanceof HTMLFormElement
+    ) {
+        const remissionLines = document.querySelector("#remission-lines");
+        const remissionLineTemplate = document.querySelector("#remission-line-template");
+        const remissionMessage = document.querySelector("#remission-message");
+        const remissionButton = document.querySelector("#remission-button");
+        const cardsByLabel = new Map(
+            [...document.querySelectorAll(".inventory-card")].map((card) => [`${card.dataset.code} · ${card.dataset.name}`, card]),
+        );
+
+        const addRemissionLine = () => {
+            const line = remissionLineTemplate.content.firstElementChild.cloneNode(true);
+            line.querySelector(".exit-line-remove").addEventListener("click", () => line.remove());
+            remissionLines.append(line);
+            line.querySelector("input").focus();
+        };
+
+        const showRemissionError = (text) => {
+            remissionMessage.textContent = text;
+            remissionMessage.dataset.state = "error";
+            remissionMessage.hidden = false;
+        };
+
+        remissionOpenButton.addEventListener("click", () => {
+            remissionForm.reset();
+            remissionLines.replaceChildren();
+            remissionMessage.hidden = true;
+            remissionButton.disabled = false;
+            addRemissionLine();
+            remissionDialog.showModal();
+        });
+        document.querySelector("#close-remission").addEventListener("click", () => remissionDialog.close());
+        remissionDialog.addEventListener("click", (event) => {
+            if (event.target === remissionDialog) remissionDialog.close();
+        });
+        document.querySelector("#remission-add-line").addEventListener("click", addRemissionLine);
+
+        remissionForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            remissionMessage.hidden = true;
+            const lineas = [];
+            for (const line of remissionLines.querySelectorAll(".remission-line")) {
+                const [article, quantity] = line.querySelectorAll("input");
+                const label = article.value.trim();
+                if (!label) continue;
+                const card = cardsByLabel.get(label);
+                if (!card) {
+                    showRemissionError(`"${label}" no es un artículo del inventario. Elígelo de la lista.`);
+                    return;
+                }
+                const cantidad = Number(quantity.value);
+                if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > Number(card.dataset.stock)) {
+                    showRemissionError(`Indica una cantidad entre 1 y ${card.dataset.stock} para ${card.dataset.code}.`);
+                    return;
+                }
+                lineas.push({ id: Number(card.dataset.id), cantidad, estado_servicio: line.querySelector("select").value });
+            }
+            if (!lineas.length) {
+                showRemissionError("Agrega al menos un artículo a la remisión.");
+                return;
+            }
+
+            // La pestaña se abre ya (con el clic del usuario) para que el navegador no la bloquee.
+            const printWindow = window.open("", "_blank");
+            remissionButton.disabled = true;
+            try {
+                const response = await fetch(remissionForm.dataset.remissionUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...Object.fromEntries(new FormData(remissionForm)), lineas }),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo crear la remisión.");
+                if (printWindow) {
+                    printWindow.location.href = result.url;
+                } else {
+                    window.open(result.url, "_blank");
+                }
+                remissionDialog.close();
+                window.location.reload();
+            } catch (error) {
+                printWindow?.close();
+                showRemissionError(error.message || "No se pudo conectar con el servidor.");
+                remissionButton.disabled = false;
+            }
+        });
+    }
+
+    // ==========================================
+    // Ingresar existencias: buscar lo que ya existe en vez de crear otro código
+    // ==========================================
+    const inventoryCards = [...document.querySelectorAll(".inventory-card")];
+    const stockDialog = document.querySelector("#stock-entry-dialog");
+    const stockForm = document.querySelector("#stock-entry-form");
+    const stockSearch = document.querySelector("#stock-entry-search");
+    const stockResults = document.querySelector("#stock-entry-results");
+    const stockEmpty = document.querySelector("#stock-entry-empty");
+    const stockSelected = document.querySelector("#stock-entry-selected");
+    const stockMessage = document.querySelector("#stock-entry-message");
+    const stockButton = document.querySelector("#stock-entry-button");
+    let stockCard = null;
+
+    const cardsMatching = (text, limit) => {
+        const words = normalizeSearchText(text.trim()).split(/\s+/).filter(Boolean);
+        if (!words.length) return [];
+        return inventoryCards.filter((card) => {
+            const content = normalizeSearchText(`${card.dataset.name} ${card.dataset.code} ${card.dataset.internalCode || ""}`);
+            return words.every((word) => content.includes(word));
+        }).slice(0, limit);
+    };
+
+    const chooseStockCard = (card) => {
+        stockCard = card;
+        document.querySelector("#stock-entry-selected-name").textContent = card.dataset.name;
+        document.querySelector("#stock-entry-selected-info").textContent =
+            `${card.dataset.code} · existencia actual: ${card.dataset.stock} ${card.dataset.unit}`;
+        stockSelected.hidden = false;
+        stockResults.hidden = true;
+        stockEmpty.hidden = true;
+        stockSearch.closest("label").hidden = true;
+    };
+
+    const renderStockResults = () => {
+        const matches = cardsMatching(stockSearch.value, 30);
+        stockResults.replaceChildren(...matches.map((card) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "stock-entry-option";
+            option.setAttribute("role", "listitem");
+            const name = document.createElement("strong");
+            name.textContent = card.dataset.name;
+            const info = document.createElement("small");
+            info.textContent = `${card.dataset.code} · ${card.dataset.stock} ${card.dataset.unit}`;
+            option.append(name, info);
+            option.addEventListener("click", () => chooseStockCard(card));
+            return option;
+        }));
+        stockResults.hidden = matches.length === 0;
+        stockEmpty.hidden = matches.length > 0 || !stockSearch.value.trim();
+    };
+
+    const openStockEntry = (card) => {
+        stockForm.reset();
+        stockCard = null;
+        stockMessage.hidden = true;
+        stockButton.disabled = false;
+        stockSelected.hidden = true;
+        stockResults.hidden = true;
+        stockEmpty.hidden = true;
+        stockSearch.closest("label").hidden = false;
+        if (card) chooseStockCard(card);
+        stockDialog.showModal();
+        if (!card) stockSearch.focus();
+    };
+
+    if (stockDialog instanceof HTMLDialogElement && stockForm instanceof HTMLFormElement) {
+        document.querySelector("#open-stock-entry").addEventListener("click", () => openStockEntry(null));
+        document.querySelector("#close-stock-entry").addEventListener("click", () => stockDialog.close());
+        stockDialog.addEventListener("click", (event) => {
+            if (event.target === stockDialog) stockDialog.close();
+        });
+        stockSearch.addEventListener("input", renderStockResults);
+        document.querySelector("#stock-entry-change").addEventListener("click", () => {
+            stockCard = null;
+            stockSelected.hidden = true;
+            stockSearch.closest("label").hidden = false;
+            renderStockResults();
+            stockSearch.focus();
+        });
+
+        stockForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const showError = (text) => {
+                stockMessage.textContent = text;
+                stockMessage.dataset.state = "error";
+                stockMessage.hidden = false;
+            };
+            if (!stockCard) {
+                showError("Busca y elige el artículo al que le vas a subir la existencia.");
+                return;
+            }
+            stockButton.disabled = true;
+            stockMessage.hidden = true;
+            try {
+                const response = await fetch(stockCard.dataset.entryUrl, { method: "POST", body: new FormData(stockForm) });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo ingresar la existencia.");
+                stockDialog.close();
+                window.location.reload();
+            } catch (error) {
+                showError(error.message || "No se pudo conectar con el servidor.");
+                stockButton.disabled = false;
+            }
+        });
+    }
+
+    // Al crear un artículo: avisa si ya existe algo parecido.
+    const newItemName = document.querySelector("#new-item-name");
+    const newItemSimilar = document.querySelector("#new-item-similar");
+    if (newItemName instanceof HTMLInputElement && newItemSimilar instanceof HTMLElement) {
+        newItemName.addEventListener("input", () => {
+            const text = newItemName.value.trim();
+            const matches = text.length >= 3 ? cardsMatching(text, 5) : [];
+            document.querySelector("#new-item-similar-list").replaceChildren(...matches.map((card) => {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.className = "btn-dialog-secondary";
+                option.textContent = `${card.dataset.code} · ${card.dataset.name}`;
+                option.addEventListener("click", () => {
+                    document.querySelector("#add-item-dialog").close();
+                    openStockEntry(card);
+                });
+                return option;
+            }));
+            newItemSimilar.hidden = matches.length === 0;
+        });
+    }
+
+    // Código consecutivo: muestra el que sigue según categoría, ubicación y tipo.
+    const codeBuilder = document.querySelector("#new-item-code-builder");
+    if (codeBuilder instanceof HTMLElement) {
+        const codeNext = document.querySelector("#new-item-code-next");
+        const codeInput = document.querySelector("#new-item-code");
+        const internalInput = document.querySelector("#new-item-internal-code");
+        const codeHelp = codeNext.textContent;
+        const [categorySelect, locationSelect, typeSelect] = codeBuilder.querySelectorAll("select");
+
+        const updateNextCode = async () => {
+            const automatic = Boolean(categorySelect.value || locationSelect.value);
+            codeInput.readOnly = automatic;
+            internalInput.readOnly = automatic;
+            if (automatic) {
+                codeInput.value = "";
+                internalInput.value = "";
+            }
+            if (!categorySelect.value || !locationSelect.value || !typeSelect.value) {
+                codeNext.textContent = codeHelp;
+                return;
+            }
+            const params = new URLSearchParams({
+                categoria: categorySelect.value,
+                ubicacion: locationSelect.value,
+                tipo: typeSelect.value,
+            });
+            try {
+                const response = await fetch(`${codeBuilder.dataset.nextUrl}?${params}`);
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                codeInput.value = result.codigo;
+                internalInput.value = result.codigo_interno;
+                codeNext.textContent = `Código que sigue: ${result.codigo} (interno ${result.codigo_interno}).`;
+            } catch (error) {
+                codeNext.textContent = error.message || "No se pudo calcular el código siguiente.";
+            }
+        };
+        [categorySelect, locationSelect, typeSelect].forEach((select) => select.addEventListener("change", updateNextCode));
+    }
+
     const addUserDialog = document.querySelector("#add-user-dialog");
     const addUserButton = document.querySelector("#open-add-user");
     const createUserForm = document.querySelector("#create-user-form");
@@ -303,6 +765,7 @@
                     body: JSON.stringify({
                         usuario: createUserForm.elements.usuario.value,
                         contrasena: createUserForm.elements.contrasena.value,
+                        rol: createUserForm.elements.rol.value,
                     }),
                 });
                 const result = await response.json();
@@ -479,14 +942,13 @@
     const updateStockLimits = (card) => {
         const stock = Number(card.dataset.stock);
         const maxStock = Number(card.dataset.maxStock);
-        const entryAvailable = maxStock > 0 ? Math.max(0, maxStock - stock) : null;
+        // El stock máximo es informativo (el más alto alcanzado); los ingresos no tienen tope.
         detailStockMax.textContent = maxStock > 0
             ? `${maxStock} ${card.dataset.unit}`
             : "Se define con el primer ingreso";
-        quantityInput.max = String(Math.min(stock, maxStock || stock));
-        entryQuantityInput.max = entryAvailable === null ? "" : String(entryAvailable);
-        entryQuantityInput.disabled = entryAvailable === 0;
-        entryButton.disabled = entryAvailable === 0;
+        quantityInput.max = String(stock);
+        entryQuantityInput.disabled = false;
+        entryButton.disabled = false;
     };
 
     const showMessage = (text, state = "success") => {
@@ -506,6 +968,14 @@
         detailCode.textContent = card.dataset.code;
         detailLocation.textContent = card.dataset.location;
         detailStock.textContent = `${card.dataset.stock} ${card.dataset.unit}`;
+        renderDetailFields(card);
+        if (serviceForm instanceof HTMLFormElement) {
+            serviceForm.elements.cliente.value = card.dataset.client || "";
+            serviceForm.elements.tipo_servicio.value = card.dataset.serviceType || "";
+            serviceForm.elements.estado_servicio.value = card.dataset.serviceStatus || "";
+            serviceMessage.hidden = true;
+            serviceEditor.open = false;
+        }
         updateStockLimits(card);
         quantityInput.value = Number(card.dataset.stock) > 0 ? "1" : "";
         quantityInput.disabled = Number(card.dataset.stock) === 0;
@@ -513,8 +983,228 @@
         entryQuantityInput.value = "1";
         entryMessage.hidden = true;
         message.hidden = true;
+        movementOperationInput.value = "";
+        movementFormInput.value = "";
+        movementNotesInput.value = "";
         dialog.showModal();
     };
+
+    // Datos de zona franca, trazabilidad y servicio: solo se muestran los que el artículo tiene.
+    const renderDetailFields = (card) => {
+        dialog.querySelectorAll("[data-zf-field]").forEach((row) => {
+            let value = card.dataset[row.dataset.zfField] || "";
+            if (value && row.dataset.zfField === "fob") {
+                value = `USD ${Number(value).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+            if (value && row.dataset.zfField === "groupName") {
+                value = `${card.dataset.group} · ${value}`;
+            }
+            if (value && (row.dataset.zfField === "entryDate" || row.dataset.zfField === "exitDate")) {
+                value = formatDate(value);
+            }
+            row.querySelector("dd").textContent = value;
+            row.hidden = !value;
+        });
+    };
+
+    // Editar artículo (administrador): el código y el stock no se cambian aquí.
+    const editDialog = document.querySelector("#edit-item-dialog");
+    const editForm = document.querySelector("#edit-item-form");
+    if (editDialog instanceof HTMLDialogElement && editForm instanceof HTMLFormElement) {
+        const editMessage = document.querySelector("#edit-item-message");
+        const editButton = document.querySelector("#edit-item-button");
+        const editFields = {
+            nombre: "name", categoria: "category", descripcion: "description", unidad: "unit", ubicacion: "location",
+            grupo: "group", marca: "brand", subpartida: "tariff", valor_fob_usd: "fob", procedencia: "origin",
+            estado: "condition", serial: "serial", responsable: "responsible", fecha_ingreso: "entryDate",
+            documento_soporte: "entryDoc", fecha_retiro: "exitDate", documento_retiro: "exitDoc",
+            razon_retiro: "exitReason",
+        };
+
+        document.querySelector("#open-edit-item").addEventListener("click", () => {
+            if (!selectedCard) return;
+            editForm.reset();
+            const categorySelect = editForm.elements.categoria;
+            if (![...categorySelect.options].some((option) => option.value === selectedCard.dataset.category)) {
+                categorySelect.add(new Option(selectedCard.dataset.category, selectedCard.dataset.category));
+            }
+            Object.entries(editFields).forEach(([field, key]) => {
+                editForm.elements[field].value = selectedCard.dataset[key] || "";
+            });
+            document.querySelector("#edit-item-code").textContent =
+                `Código ${selectedCard.dataset.code}. El código y el stock no se cambian aquí.`;
+            editMessage.hidden = true;
+            editButton.disabled = false;
+            dialog.close();
+            editDialog.showModal();
+        });
+        document.querySelector("#close-edit-item").addEventListener("click", () => editDialog.close());
+        editDialog.addEventListener("click", (event) => {
+            if (event.target === editDialog) editDialog.close();
+        });
+
+        editForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            editButton.disabled = true;
+            editMessage.hidden = true;
+            try {
+                const response = await fetch(selectedCard.dataset.updateUrl, { method: "PUT", body: new FormData(editForm) });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo guardar el artículo.");
+                editDialog.close();
+                window.location.reload();
+            } catch (error) {
+                editMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                editMessage.dataset.state = "error";
+                editMessage.hidden = false;
+                editButton.disabled = false;
+            }
+        });
+    }
+
+    const serviceEditor = document.querySelector("#service-editor");
+    const serviceForm = document.querySelector("#service-form");
+    const serviceMessage = document.querySelector("#service-message");
+    if (serviceForm instanceof HTMLFormElement) {
+        serviceForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!selectedCard) return;
+            const button = serviceForm.querySelector("button[type=submit]");
+            button.disabled = true;
+            serviceMessage.hidden = true;
+            try {
+                const response = await fetch(selectedCard.dataset.serviceUrl, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(Object.fromEntries(new FormData(serviceForm))),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo guardar el servicio.");
+                const { cliente, tipo_servicio: tipo, estado_servicio: estado } = result.articulo;
+                selectedCard.dataset.client = cliente || "";
+                selectedCard.dataset.serviceType = tipo || "";
+                selectedCard.dataset.serviceStatus = estado || "";
+                // Etiqueta del estado sobre la imagen de la tarjeta.
+                let label = selectedCard.querySelector(".service-label");
+                if (estado) {
+                    if (!label) {
+                        label = document.createElement("span");
+                        selectedCard.querySelector(".item-image-wrap").append(label);
+                    }
+                    label.className = `service-label service-label--${estado.toLowerCase().replace(/\s+/g, "-")}`;
+                    label.textContent = estado;
+                } else {
+                    label?.remove();
+                }
+                renderDetailFields(selectedCard);
+                serviceMessage.textContent = result.cambios ? "Servicio actualizado." : "No había cambios.";
+                serviceMessage.dataset.state = "success";
+            } catch (error) {
+                serviceMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                serviceMessage.dataset.state = "error";
+            } finally {
+                serviceMessage.hidden = false;
+                button.disabled = false;
+            }
+        });
+    }
+
+    // "2026-05-08" -> "8 may 2026" (sin pasar por la zona horaria del navegador).
+    const formatDate = (isoDate) => {
+        const [year, month, day] = isoDate.split("-").map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+    };
+
+    const movementOperationInput = document.querySelector("#movement-operation");
+    const movementFormInput = document.querySelector("#movement-form-number");
+    const movementNotesInput = document.querySelector("#movement-notes");
+    const sizfraData = () => ({
+        operacion_sizfra: movementOperationInput.value.trim(),
+        formulario: movementFormInput.value.trim(),
+        observaciones: movementNotesInput.value.trim(),
+    });
+
+    const traceButton = document.querySelector("#open-trace");
+    const traceDialog = document.querySelector("#trace-dialog");
+    if (traceButton instanceof HTMLButtonElement && traceDialog instanceof HTMLDialogElement) {
+        const traceTitle = document.querySelector("#trace-title");
+        const traceSummary = document.querySelector("#trace-summary");
+        const traceMessage = document.querySelector("#trace-message");
+        const traceList = document.querySelector("#trace-list");
+        const traceDateFormatter = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+
+        const traceEntry = (evento) => {
+            const item = document.createElement("li");
+            const header = document.createElement("div");
+            const title = document.createElement("strong");
+            const when = document.createElement("span");
+            const detail = document.createElement("p");
+            header.className = "trace-entry-header";
+            when.textContent = `${traceDateFormatter.format(new Date(evento.fecha_hora))} · ${evento.empleado} (@${evento.usuario})`;
+            const lines = [];
+            if (evento.clase === "movimiento") {
+                item.className = evento.tipo === "Ingreso" ? "trace-entry trace-entry--entry" : "trace-entry trace-entry--withdrawal";
+                title.textContent = `${evento.tipo} de ${evento.cantidad} ${evento.unidad}`;
+                if (evento.origen) lines.push(`Origen: ${evento.origen}`);
+                if (evento.id_salida) {
+                    lines.push(evento.rol === "Principal"
+                        ? `Equipo de la salida integrada #${evento.id_salida} (${evento.proceso})`
+                        : `Integrada en ${evento.referencia} · salida #${evento.id_salida} (${evento.proceso})`);
+                }
+                const sizfra = [
+                    evento.operacion_sizfra ? `operación ${evento.operacion_sizfra}` : "",
+                    evento.formulario ? `formulario ${evento.formulario}` : "",
+                ].filter(Boolean).join(", ");
+                if (sizfra) lines.push(`Sizfra: ${sizfra}`);
+                if (evento.observaciones) lines.push(`Observaciones: ${evento.observaciones}`);
+            } else {
+                item.className = "trace-entry trace-entry--audit";
+                title.textContent = evento.accion;
+                if (evento.detalle) lines.push(evento.detalle);
+            }
+            detail.textContent = lines.join(" · ");
+            header.append(title, when);
+            item.append(header);
+            if (lines.length) item.append(detail);
+            if (evento.documento_url) {
+                const documentLink = document.createElement("a");
+                documentLink.className = "document-link";
+                documentLink.href = evento.documento_url;
+                documentLink.textContent = `Documento soporte: ${evento.documento_nombre}`;
+                item.append(documentLink);
+            }
+            return item;
+        };
+
+        traceButton.addEventListener("click", async () => {
+            if (!selectedCard) return;
+            traceTitle.textContent = `${selectedCard.dataset.code} · ${selectedCard.dataset.name}`;
+            traceSummary.textContent = "";
+            traceList.replaceChildren();
+            traceMessage.textContent = "Cargando trazabilidad...";
+            traceMessage.dataset.state = "success";
+            traceMessage.hidden = false;
+            traceDialog.showModal();
+            try {
+                const url = traceButton.dataset.traceUrl.replace("__CODIGO__", encodeURIComponent(selectedCard.dataset.code));
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || "No se pudo cargar la trazabilidad.");
+                }
+                traceSummary.textContent = `${result.eventos.length} registros, del más reciente al más antiguo.`;
+                traceList.append(...result.eventos.map(traceEntry));
+                traceMessage.hidden = true;
+            } catch (error) {
+                traceMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                traceMessage.dataset.state = "error";
+            }
+        });
+        document.querySelector("#close-trace").addEventListener("click", () => traceDialog.close());
+        traceDialog.addEventListener("click", (event) => {
+            if (event.target === traceDialog) traceDialog.close();
+        });
+    }
 
     const showEntryMessage = (text, state = "success") => {
         entryMessage.textContent = text;
@@ -542,16 +1232,8 @@
             }
 
             const quantity = Number(entryQuantityInput.value);
-            const maxStock = Number(selectedCard.dataset.maxStock);
-            const currentStock = Number(selectedCard.dataset.stock);
-            const available = maxStock > 0 ? maxStock - currentStock : Infinity;
-            if (!Number.isInteger(quantity) || quantity < 1 || quantity > available) {
-                showEntryMessage(
-                    maxStock > 0
-                        ? `Puedes ingresar hasta ${Math.max(0, available)} ${selectedCard.dataset.unit}.`
-                        : "Indica una cantidad entera mayor que cero.",
-                    "error",
-                );
+            if (!Number.isInteger(quantity) || quantity < 1) {
+                showEntryMessage("Indica una cantidad entera mayor que cero.", "error");
                 return;
             }
 
@@ -561,7 +1243,7 @@
                 const response = await fetch(selectedCard.dataset.entryUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ cantidad: quantity }),
+                    body: JSON.stringify({ cantidad: quantity, ...sizfraData() }),
                 });
                 const result = await response.json();
                 if (!response.ok) {
@@ -586,8 +1268,7 @@
             } catch (error) {
                 showEntryMessage(error.message || "No se pudo conectar con el servidor.", "error");
             } finally {
-                const maxStock = Number(selectedCard.dataset.maxStock);
-                entryButton.disabled = maxStock > 0 && Number(selectedCard.dataset.stock) >= maxStock;
+                entryButton.disabled = false;
             }
         });
     }
@@ -613,7 +1294,7 @@
                 const response = await fetch(selectedCard.dataset.withdrawUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ cantidad: quantity }),
+                    body: JSON.stringify({ cantidad: quantity, ...sizfraData() }),
                 });
                 const result = await response.json();
                 if (!response.ok) {
@@ -631,6 +1312,10 @@
                 quantityInput.value = result.articulo.stock > 0 ? "1" : "";
                 quantityInput.disabled = result.articulo.stock === 0;
                 updateSummary();
+                if (typeof renderMovementHistory === "function") {
+                    movementRecords.unshift(result.movimiento);
+                    renderMovementHistory();
+                }
                 dialog.close();
                 showToast(`Retiraste ${quantity} ${quantity === 1 ? "unidad" : "unidades"} de ${selectedCard.dataset.name}.`);
             } catch (error) {
@@ -701,7 +1386,9 @@
 
         const filteredMovements = movementRecords.filter((movimiento) => {
             const searchableText = normalizeMovementText(
-                `${movimiento.tipo} ${movimiento.empleado} ${movimiento.usuario} ${movimiento.articulo} ${movimiento.codigo_articulo} ${movimiento.categoria}`,
+                `${movimiento.tipo} ${movimiento.empleado} ${movimiento.usuario} ${movimiento.articulo} ${movimiento.codigo_articulo} ${movimiento.categoria} `
+                + `${movimiento.operacion_sizfra || ""} ${movimiento.formulario || ""} ${movimiento.referencia || ""} ${movimiento.proceso || ""} `
+                + `${movimiento.observaciones || ""} ${movimiento.origen || ""}`,
             );
             const movementDate = localDateKey(movimiento.fecha_hora);
             return (!query || searchableText.includes(query))
@@ -752,7 +1439,40 @@
             employeeCell.append(employeeName, username);
             articleCell.append(articleName, articleCode);
             typeCell.append(movementType);
-            row.append(dateCell, employeeCell, typeCell, articleCell, quantityCell);
+            // Salida integrada: el equipo y cada parte muestran a qué salida pertenecen.
+            if (movimiento.id_salida) {
+                const integration = document.createElement("small");
+                integration.textContent = movimiento.rol === "Principal"
+                    ? `Equipo · ${movimiento.proceso} #${movimiento.id_salida}`
+                    : `Integrada en ${movimiento.referencia} #${movimiento.id_salida}`;
+                typeCell.append(integration);
+                row.classList.add("movement-row--integrated");
+            } else if (movimiento.origen && movimiento.origen !== "Manual") {
+                const origin = document.createElement("small");
+                origin.textContent = movimiento.origen;
+                typeCell.append(origin);
+            }
+            if (movimiento.observaciones) {
+                const notes = document.createElement("small");
+                notes.className = "movement-notes";
+                notes.textContent = movimiento.observaciones;
+                articleCell.append(notes);
+            }
+            if (movimiento.documento_url) {
+                const documentLink = document.createElement("a");
+                documentLink.className = "document-link";
+                documentLink.href = movimiento.documento_url;
+                documentLink.textContent = `Documento soporte: ${movimiento.documento_nombre}`;
+                articleCell.append(documentLink);
+            }
+            const sizfraCell = document.createElement("td");
+            sizfraCell.className = "movement-sizfra";
+            const sizfraParts = [
+                movimiento.operacion_sizfra ? `Op. ${movimiento.operacion_sizfra}` : "",
+                movimiento.formulario ? `Form. ${movimiento.formulario}` : "",
+            ].filter(Boolean);
+            sizfraCell.textContent = sizfraParts.join(" · ") || "—";
+            row.append(dateCell, employeeCell, typeCell, articleCell, quantityCell, sizfraCell);
             movementTableBody.append(row);
         });
 
@@ -814,6 +1534,258 @@
         });
     }
 
+    // ==========================================
+    // Reportes y conciliación con Sizfra
+    // ==========================================
+    const reportMessage = document.querySelector("#report-message");
+    const reportSummary = document.querySelector("#report-summary");
+    const reportTableWrap = document.querySelector("#report-table-wrap");
+    const reportTableHead = document.querySelector("#report-table-head");
+    const reportTableBody = document.querySelector("#report-table-body");
+    const reportDate = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+    const usd = (value) => (value === null || value === undefined
+        ? ""
+        : `USD ${Number(value).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+    // Columnas de cada reporte: [encabezado, función que saca el valor de la fila].
+    const reportColumns = {
+        inventario: [
+            ["Código ZF", (f) => f.codigo],
+            ["Descripción", (f) => f.nombre],
+            ["Grupo", (f) => f.grupo || "—"],
+            ["Ubicación", (f) => f.ubicacion],
+            ["Stock", (f) => `${f.stock} ${f.unidad}`],
+            ["Subpartida", (f) => f.subpartida || ""],
+            ["Valor total", (f) => usd(f.valor_total_usd)],
+        ],
+        movimientos: [
+            ["Fecha", (f) => reportDate.format(new Date(f.fecha_hora))],
+            ["Tipo", (f) => f.tipo],
+            ["Código", (f) => f.codigo_articulo],
+            ["Artículo", (f) => f.articulo],
+            ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
+            ["Sizfra", (f) => [f.operacion_sizfra && `Op. ${f.operacion_sizfra}`, f.formulario && `Form. ${f.formulario}`].filter(Boolean).join(" · ")],
+            ["Empleado", (f) => f.empleado],
+        ],
+        salidas: [
+            ["Salida", (f) => `#${f.salida}`],
+            ["Fecha", (f) => reportDate.format(new Date(f.fecha_hora))],
+            ["Proceso", (f) => f.proceso],
+            ["Referencia", (f) => f.referencia],
+            ["Rol", (f) => (f.rol === "Principal" ? "Equipo" : "Parte")],
+            ["Artículo", (f) => `${f.codigo_articulo} · ${f.articulo}`],
+            ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
+        ],
+        remisiones: [
+            ["Número", (f) => {
+                const link = document.createElement("a");
+                link.href = f.url;
+                link.target = "_blank";
+                link.rel = "noopener";
+                link.textContent = f.numero;
+                return link;
+            }],
+            ["Fecha", (f) => formatDate(f.fecha)],
+            ["Cliente", (f) => `${f.cliente_nombre} · ${f.cliente_nit}`],
+            ["Servicio", (f) => f.tipo_servicio || ""],
+            ["Artículos", (f) => f.lineas.map((l) => `${l.cantidad} × ${l.codigo}`).join(", ")],
+            ["Sizfra", (f) => [f.operacion_sizfra && `Op. ${f.operacion_sizfra}`, f.formulario && `Form. ${f.formulario}`].filter(Boolean).join(" · ")],
+        ],
+        conciliacion: [
+            ["Estado", (f) => f.estado],
+            ["Código", (f) => f.codigo],
+            ["Artículo", (f) => f.nombre || "—"],
+            ["Stock app", (f) => (f.stock_app ?? "—")],
+            ["Saldo Sizfra", (f) => (f.saldo_sizfra ?? "—")],
+            ["Diferencia", (f) => (f.diferencia ?? "—")],
+        ],
+    };
+
+    const reportSummaryText = (report, result) => {
+        if (report === "inventario") {
+            return result.resumen.map((g) => `${g.grupo} · ${g.nombre}: ${g.articulos} artículos, ${g.unidades} unidades${g.valor_total_usd ? `, ${usd(g.valor_total_usd)}` : ""}`);
+        }
+        if (report === "movimientos") {
+            const r = result.resumen;
+            return [`${r.ingresos} ingresos (${r.unidades_ingresadas} unidades) y ${r.retiros} retiros (${r.unidades_retiradas} unidades).`];
+        }
+        if (report === "salidas") {
+            return [`${result.total} salidas integradas.`];
+        }
+        if (report === "remisiones") {
+            return [`${result.total} remisiones. Haz clic en el número para abrirla e imprimirla.`];
+        }
+        const r = result.resumen;
+        return [
+            `Columnas usadas del archivo: código "${result.columnas.codigo}", saldo "${result.columnas.saldo}".`,
+            `${r.Coincide} coinciden, ${r.Diferencia} con diferencia, ${r["Solo en Sizfra"]} solo en Sizfra y ${r["Solo en la app"]} solo en la app.`,
+        ];
+    };
+
+    const reportRows = (report, result) => {
+        if (report === "salidas") {
+            return result.salidas.flatMap((s) => s.movimientos.map((m) => ({ ...m, salida: s.id, proceso: s.proceso, referencia: s.referencia })));
+        }
+        if (report === "remisiones") {
+            return result.remisiones;
+        }
+        return result.filas;
+    };
+
+    const showReportMessage = (text, state) => {
+        reportMessage.textContent = text;
+        reportMessage.dataset.state = state || "";
+        reportMessage.hidden = false;
+    };
+
+    const reportQuery = (form) => {
+        const params = new URLSearchParams();
+        new FormData(form).forEach((value, key) => {
+            if (typeof value === "string" && value.trim()) params.set(key, value.trim());
+        });
+        return params;
+    };
+
+    const fetchReport = (form, excel) => {
+        const report = form.dataset.report;
+        if (report === "conciliacion") {
+            const body = new FormData(form);
+            body.set("solo_zf", form.elements.solo_zf.checked ? "1" : "0");
+            if (excel) body.set("formato", "xlsx");
+            return fetch(form.dataset.reportUrl, { method: "POST", body });
+        }
+        const params = reportQuery(form);
+        if (excel) params.set("formato", "xlsx");
+        return fetch(`${form.dataset.reportUrl}?${params}`);
+    };
+
+    document.querySelectorAll(".report-card").forEach((form) => {
+        const report = form.dataset.report;
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            showReportMessage("Cargando reporte...");
+            reportSummary.hidden = true;
+            reportTableWrap.hidden = true;
+            try {
+                const response = await fetchReport(form, false);
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo generar el reporte.");
+
+                const rows = reportRows(report, result);
+                const columns = reportColumns[report];
+                reportSummary.replaceChildren(...reportSummaryText(report, result).map((line) => {
+                    const p = document.createElement("p");
+                    p.textContent = line;
+                    return p;
+                }));
+                reportSummary.hidden = false;
+                if (!rows.length) {
+                    showReportMessage("No hay registros con esos filtros.");
+                    return;
+                }
+                const headRow = document.createElement("tr");
+                headRow.append(...columns.map(([title]) => {
+                    const th = document.createElement("th");
+                    th.scope = "col";
+                    th.textContent = title;
+                    return th;
+                }));
+                reportTableHead.replaceChildren(headRow);
+                reportTableBody.replaceChildren(...rows.map((row) => {
+                    const tr = document.createElement("tr");
+                    if (report === "conciliacion") {
+                        tr.className = `report-row--${row.estado.toLowerCase().replace(/\s+/g, "-")}`;
+                    }
+                    tr.append(...columns.map(([, value]) => {
+                        const td = document.createElement("td");
+                        const content = value(row);
+                        if (content instanceof Node) {
+                            td.append(content);
+                        } else {
+                            td.textContent = content;
+                        }
+                        return td;
+                    }));
+                    return tr;
+                }));
+                reportMessage.hidden = true;
+                reportTableWrap.hidden = false;
+            } catch (error) {
+                showReportMessage(error.message || "No se pudo conectar con el servidor.", "error");
+            }
+        });
+
+        form.querySelector("[data-download]")?.addEventListener("click", async () => {
+            if (!form.reportValidity()) return;
+            try {
+                const response = await fetchReport(form, true);
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || "No se pudo descargar el reporte.");
+                }
+                const disposition = response.headers.get("Content-Disposition") || "";
+                const match = disposition.match(/filename="?([^";]+)"?/);
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(await response.blob());
+                link.download = match ? match[1] : "reporte.xlsx";
+                link.click();
+                URL.revokeObjectURL(link.href);
+            } catch (error) {
+                showReportMessage(error.message || "No se pudo conectar con el servidor.", "error");
+            }
+        });
+    });
+
+    // ==========================================
+    // Descargas en Excel y PDF del historial y de usuarios (con los filtros de la pantalla)
+    // ==========================================
+    const exportFilters = {
+        movimientos: () => ({
+            q: movementSearchInput instanceof HTMLInputElement ? movementSearchInput.value.trim() : "",
+            categoria: movementCategoryFilter instanceof HTMLSelectElement ? movementCategoryFilter.value : "",
+            dia: movementDateInput instanceof HTMLInputElement ? movementDateInput.value : "",
+        }),
+        usuarios: () => ({
+            q: document.querySelector("#users-search")?.value.trim() || "",
+            rol: document.querySelector("#users-role-filter")?.value || "",
+        }),
+    };
+
+    document.querySelectorAll(".export-buttons").forEach((group) => {
+        group.querySelectorAll("[data-export-format]").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const params = new URLSearchParams({ formato: button.dataset.exportFormat });
+                Object.entries(exportFilters[group.dataset.exportScope]()).forEach(([key, value]) => {
+                    if (value) params.set(key, value);
+                });
+                const label = button.querySelector("span");
+                const originalText = label.textContent;
+                button.disabled = true;
+                label.textContent = "Generando...";
+                try {
+                    const response = await fetch(`${group.dataset.exportUrl}?${params}`);
+                    if (!response.ok) {
+                        const result = await response.json().catch(() => ({}));
+                        throw new Error(result.error || "No se pudo generar el archivo.");
+                    }
+                    const disposition = response.headers.get("Content-Disposition") || "";
+                    const match = disposition.match(/filename="?([^";]+)"?/);
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(await response.blob());
+                    link.download = match ? match[1] : `descarga.${button.dataset.exportFormat}`;
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                } catch (error) {
+                    window.alert(error.message || "No se pudo conectar con el servidor.");
+                } finally {
+                    button.disabled = false;
+                    label.textContent = originalText;
+                }
+            });
+        });
+    });
+
     tabButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
             const targetId = btn.dataset.target;
@@ -821,6 +1793,7 @@
             const tabHashes = {
                 "section-users": "#usuarios",
                 "section-movements": "#movimientos",
+                "section-reports": "#reportes",
                 "section-inventory": "#inventario",
             };
             window.location.hash = tabHashes[targetId] || "#inventario";
@@ -831,9 +1804,10 @@
     const initialTabs = {
         "#usuarios": "section-users",
         "#movimientos": "section-movements",
+        "#reportes": "section-reports",
     };
     const initialTab = initialTabs[window.location.hash];
-    if (initialTab) {
+    if (initialTab && document.querySelector(`#${initialTab}`)) {
         switchTab(initialTab);
         if (initialTab === "section-movements") loadMovementHistory();
     }
