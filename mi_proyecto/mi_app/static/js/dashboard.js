@@ -1007,6 +1007,61 @@
         });
     };
 
+    // Editar artículo (administrador): el código y el stock no se cambian aquí.
+    const editDialog = document.querySelector("#edit-item-dialog");
+    const editForm = document.querySelector("#edit-item-form");
+    if (editDialog instanceof HTMLDialogElement && editForm instanceof HTMLFormElement) {
+        const editMessage = document.querySelector("#edit-item-message");
+        const editButton = document.querySelector("#edit-item-button");
+        const editFields = {
+            nombre: "name", categoria: "category", descripcion: "description", unidad: "unit", ubicacion: "location",
+            grupo: "group", marca: "brand", subpartida: "tariff", valor_fob_usd: "fob", procedencia: "origin",
+            estado: "condition", serial: "serial", responsable: "responsible", fecha_ingreso: "entryDate",
+            documento_soporte: "entryDoc", fecha_retiro: "exitDate", documento_retiro: "exitDoc",
+            razon_retiro: "exitReason",
+        };
+
+        document.querySelector("#open-edit-item").addEventListener("click", () => {
+            if (!selectedCard) return;
+            editForm.reset();
+            const categorySelect = editForm.elements.categoria;
+            if (![...categorySelect.options].some((option) => option.value === selectedCard.dataset.category)) {
+                categorySelect.add(new Option(selectedCard.dataset.category, selectedCard.dataset.category));
+            }
+            Object.entries(editFields).forEach(([field, key]) => {
+                editForm.elements[field].value = selectedCard.dataset[key] || "";
+            });
+            document.querySelector("#edit-item-code").textContent =
+                `Código ${selectedCard.dataset.code}. El código y el stock no se cambian aquí.`;
+            editMessage.hidden = true;
+            editButton.disabled = false;
+            dialog.close();
+            editDialog.showModal();
+        });
+        document.querySelector("#close-edit-item").addEventListener("click", () => editDialog.close());
+        editDialog.addEventListener("click", (event) => {
+            if (event.target === editDialog) editDialog.close();
+        });
+
+        editForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            editButton.disabled = true;
+            editMessage.hidden = true;
+            try {
+                const response = await fetch(selectedCard.dataset.updateUrl, { method: "PUT", body: new FormData(editForm) });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No se pudo guardar el artículo.");
+                editDialog.close();
+                window.location.reload();
+            } catch (error) {
+                editMessage.textContent = error.message || "No se pudo conectar con el servidor.";
+                editMessage.dataset.state = "error";
+                editMessage.hidden = false;
+                editButton.disabled = false;
+            }
+        });
+    }
+
     const serviceEditor = document.querySelector("#service-editor");
     const serviceForm = document.querySelector("#service-form");
     const serviceMessage = document.querySelector("#service-message");

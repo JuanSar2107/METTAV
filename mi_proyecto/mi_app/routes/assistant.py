@@ -20,7 +20,7 @@ _MAX_PREGUNTA = 2000
 _MAX_HISTORIAL = 10
 # Límites del contexto: con mucha operación el texto enviado a Gemini no
 # debe crecer sin control (cada consulta lo envía completo).
-_MAX_ARTICULOS = 300
+_MAX_ARTICULOS = 1000
 _MAX_MOVIMIENTOS = 60
 _MAX_SALIDAS = 20
 _MAX_REMISIONES = 20

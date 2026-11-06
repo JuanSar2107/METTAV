@@ -220,6 +220,7 @@
                     data-service-type="{{ articulo.tipo_servicio or '' }}"
                     data-service-status="{{ articulo.estado_servicio or '' }}"
                     data-service-url="{{ url_for('inventario.actualizar_servicio', id_articulo=articulo.id) }}"
+                    data-update-url="{{ url_for('inventario.actualizar_articulo', id_articulo=articulo.id) }}"
                     data-category="{{ articulo.categoria }}"
                     data-description="{{ articulo.descripcion }}"
                     data-location="{{ articulo.ubicacion }}"
@@ -638,6 +639,9 @@
                 </form>
                 <p class="dialog-message" id="service-message" role="status" aria-live="polite" hidden></p>
             </details>
+            {% if es_admin %}
+            <button class="btn-dialog-secondary trace-open-button" id="open-edit-item" type="button">Editar artículo</button>
+            {% endif %}
             <button class="btn-dialog-secondary trace-open-button" id="open-trace" type="button"
                 data-trace-url="{{ url_for('inventario.trazabilidad_articulo', codigo='__CODIGO__') }}">
                 Ver trazabilidad completa
@@ -1147,6 +1151,94 @@
     </div>
 </dialog>
 
+<dialog class="item-dialog admin-dialog" id="edit-item-dialog" aria-labelledby="edit-item-title">
+    <button class="dialog-close" id="close-edit-item" type="button" aria-label="Cerrar formulario">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m18 6-12 12M6 6l12 12" />
+        </svg>
+    </button>
+    <div class="admin-dialog-content">
+        <p class="eyebrow">GESTIÓN DE BODEGA</p>
+        <h2 id="edit-item-title">Editar artículo</h2>
+        <p class="role-note" id="edit-item-code"></p>
+        <form id="edit-item-form" enctype="multipart/form-data">
+            <div class="admin-form-grid">
+                <label class="admin-field"><span>Nombre</span>
+                    <input name="nombre" type="text" maxlength="120" required>
+                </label>
+                <label class="admin-field"><span>Categoría</span>
+                    <select name="categoria" required>
+                        {% for cat in categorias %}<option value="{{ cat.nombre }}">{{ cat.nombre }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="admin-field admin-field--full"><span>Descripción</span>
+                    <textarea name="descripcion" rows="3" maxlength="4000" required></textarea>
+                </label>
+                <label class="admin-field"><span>Unidad</span>
+                    <input name="unidad" type="text" maxlength="24">
+                </label>
+                <label class="admin-field"><span>Ubicación</span>
+                    <input name="ubicacion" type="text" maxlength="80">
+                </label>
+                <label class="admin-field admin-field--full"><span>Cambiar imagen</span>
+                    <input name="imagen" type="file" accept="image/jpeg,image/png,image/webp">
+                    <small>JPEG, PNG o WEBP; máximo 5 MB. Si no eliges una, se conserva la actual.</small>
+                </label>
+                <p class="admin-field--full admin-form-section">Datos de zona franca</p>
+                <label class="admin-field"><span>Grupo de inventario</span>
+                    <select name="grupo">
+                        <option value="">Sin grupo</option>
+                        {% for codigo, nombre in grupos_inventario.items() %}<option value="{{ codigo }}">{{ codigo }} · {{ nombre }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="admin-field"><span>Marca</span>
+                    <input name="marca" type="text" maxlength="80">
+                </label>
+                <label class="admin-field"><span>Subpartida arancelaria</span>
+                    <input name="subpartida" type="text" maxlength="20" autocomplete="off">
+                </label>
+                <label class="admin-field"><span>Valor FOB (USD)</span>
+                    <input name="valor_fob_usd" type="text" inputmode="decimal" maxlength="20">
+                </label>
+                <label class="admin-field"><span>Procedencia</span>
+                    <select name="procedencia">
+                        <option value="">Sin indicar</option>
+                        <option value="Nacional">Nacional</option>
+                        <option value="Extranjera">Extranjera</option>
+                    </select>
+                </label>
+                <label class="admin-field"><span>Estado de la mercancía</span>
+                    <input name="estado" type="text" maxlength="40">
+                </label>
+                <label class="admin-field"><span>Serial</span>
+                    <input name="serial" type="text" maxlength="80" autocomplete="off">
+                </label>
+                <label class="admin-field"><span>Responsable</span>
+                    <input name="responsable" type="text" maxlength="120">
+                </label>
+                <label class="admin-field"><span>Fecha de ingreso</span>
+                    <input name="fecha_ingreso" type="date">
+                </label>
+                <label class="admin-field"><span>Documento soporte</span>
+                    <input name="documento_soporte" type="text" maxlength="160">
+                </label>
+                <label class="admin-field"><span>Fecha de retiro</span>
+                    <input name="fecha_retiro" type="date">
+                </label>
+                <label class="admin-field"><span>Documento de retiro</span>
+                    <input name="documento_retiro" type="text" maxlength="160">
+                </label>
+                <label class="admin-field admin-field--full"><span>Razón del retiro</span>
+                    <input name="razon_retiro" type="text" maxlength="2000">
+                </label>
+            </div>
+            <p class="dialog-message" id="edit-item-message" role="status" aria-live="polite" hidden></p>
+            <div class="admin-form-actions">
+                <button class="withdraw-button" id="edit-item-button" type="submit">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</dialog>
 {% endif %}
 
 {% if puede_operar %}

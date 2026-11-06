@@ -261,6 +261,71 @@ def crear_articulo():
     return jsonify(articulo={"id": articulo.id, "nombre": articulo.nombre}), 201
 
 
+@inventario_bp.put("/<int:id_articulo>")
+def actualizar_articulo(id_articulo: int):
+    """Corrige los datos de un artículo y deja en la auditoría qué campos cambiaron.
+
+    El código (es el de Sizfra y el de su historia) y el stock no se editan aquí:
+    el stock cambia solo con ingresos, retiros, salidas y remisiones. El cliente y
+    el servicio tienen su propio formulario.
+    """
+    error = _error_admin()
+    if error is not None:
+        return error
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    if articulo is None:
+        return jsonify(error="El artículo no existe."), 404
+
+    nuevos = {
+        "nombre": request.form.get("nombre", "").strip(),
+        "categoria": request.form.get("categoria", "").strip() or "General",
+        "descripcion": request.form.get("descripcion", "").strip(),
+        "unidad": request.form.get("unidad", "").strip() or "unidades",
+        "ubicacion": request.form.get("ubicacion", "").strip() or "Sin asignar",
+    }
+    if not nuevos["nombre"] or len(nuevos["nombre"]) > 120:
+        return jsonify(error="El nombre es obligatorio y no puede superar 120 caracteres."), 400
+    if len(nuevos["categoria"]) > 60 or len(nuevos["unidad"]) > 24 or len(nuevos["ubicacion"]) > 80:
+        return jsonify(error="La categoría, unidad o ubicación supera el largo permitido."), 400
+    if not nuevos["descripcion"] or len(nuevos["descripcion"]) > 4000:
+        return jsonify(error="La descripción es obligatoria y no puede superar 4000 caracteres."), 400
+    try:
+        nuevos.update(campos_zona_franca(request.form))
+        nuevos.update(campos_trazabilidad(request.form))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    # El código interno y el tipo forman parte del código: no se editan.
+    nuevos["codigo_interno"] = articulo.codigo_interno
+    nuevos["tipo"] = articulo.tipo
+
+    cambios = [campo for campo, valor in nuevos.items() if getattr(articulo, campo) != valor]
+
+    imagen = request.files.get("imagen")
+    imagen_anterior = None
+    if imagen is not None and imagen.filename:
+        try:
+            imagen_url, _ruta = guardar_imagen(imagen, "inventory")
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
+        imagen_anterior = articulo.imagen_url
+        articulo.imagen_url = imagen_url
+        cambios.append("imagen")
+
+    if cambios:
+        for campo, valor in nuevos.items():
+            setattr(articulo, campo, valor)
+        if not Categoria.query.filter(db.func.lower(Categoria.nombre) == nuevos["categoria"].lower()).first():
+            db.session.add(Categoria(nombre=nuevos["categoria"]))
+        _auditar(
+            _usuario_actual(), "Editar artículo", articulo.codigo,
+            "Campos: " + ", ".join(campo.replace("_", " ") for campo in cambios),
+        )
+        db.session.commit()
+    if imagen_anterior:
+        eliminar_imagen_subida(imagen_anterior, "inventory")
+    return jsonify(articulo={"id": articulo.id, "nombre": articulo.nombre}, cambios=len(cambios))
+
+
 # Campos que una nueva importación actualiza en un artículo que ya existe.
 # El stock no se toca: lo cambian solo los ingresos y retiros.
 _CAMPOS_ACTUALIZABLES = (
