@@ -1,4 +1,6 @@
-from flask import Blueprint, current_app, jsonify, redirect, render_template, session, url_for
+from pathlib import Path
+
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, send_file, session, url_for
 
 from mi_app.extensions import db
 from mi_app.security import usuario_actual
@@ -34,6 +36,7 @@ _DESCRIPCIONES_RUTAS = {
     "remisiones.crear_remision": "Crea una remisión de salida y da de baja la mercancía; requiere sesión.",
     "remisiones.listar_remisiones": "Lista las remisiones por fecha o cliente; requiere sesión.",
     "remisiones.ver_remision": "Muestra la remisión lista para imprimir o guardar como PDF; requiere sesión.",
+    "main.manual_usuario": "Descarga el manual de usuario en PDF; requiere sesión.",
     "inventario.actualizar_articulo": "Corrige los datos y la imagen de un artículo, sin cambiar su código ni su stock; requiere sesión de administrador.",
     "inventario.siguiente_codigo": "Devuelve el código ZF e interno que siguen en el consecutivo; requiere sesión de administrador.",
     "inventario.descargar_documento": "Descarga el documento soporte de un ingreso; requiere sesión de administrador o auxiliar.",
@@ -157,6 +160,17 @@ def dashboard():
         ubicaciones_sigla=UBICACIONES_SIGLA,
         tipos_codigo=TIPOS_CODIGO,
     )
+
+
+@main_bp.get('/manual-de-usuario')
+def manual_usuario():
+    """Descarga el manual de usuario en PDF; requiere sesión."""
+    if usuario_actual() is None:
+        return redirect(url_for('main.login'))
+    ruta = Path(current_app.root_path) / "recursos" / "Manual-de-usuario-METTAV.pdf"
+    if not ruta.is_file():
+        abort(404)
+    return send_file(ruta, mimetype="application/pdf", as_attachment=True, download_name=ruta.name)
 
 
 @main_bp.get('/docs')

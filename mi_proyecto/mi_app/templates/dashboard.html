@@ -25,6 +25,12 @@
                 </span>
             </a>
             <div class="account-controls">
+                <a class="btn-logout btn-manual" id="manual-button" href="{{ url_for('main.manual_usuario') }}" title="Descargar el manual de usuario" aria-label="Descargar el manual de usuario">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5Zm0 15a2 2 0 0 0 2 2h13v-4M12 7v6m-2.5-2.5L12 13l2.5-2.5" />
+                    </svg>
+                    <span>Manual de usuario</span>
+                </a>
                 <button
                     class="profile-trigger"
                     id="profile-trigger"
