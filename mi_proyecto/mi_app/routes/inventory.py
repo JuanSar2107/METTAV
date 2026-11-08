@@ -272,7 +272,7 @@ def actualizar_articulo(id_articulo: int):
     error = _error_admin()
     if error is not None:
         return error
-    articulo = db.session.get(ArticuloInventario, id_articulo)
+    articulo = _articulo_activo(id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 
@@ -481,7 +481,7 @@ def eliminar_articulo(id_articulo: int):
     if error is not None:
         return error
 
-    articulo = db.session.get(ArticuloInventario, id_articulo)
+    articulo = _articulo_activo(id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 
@@ -504,7 +504,7 @@ def actualizar_servicio(id_articulo: int):
         return jsonify(error="Debes iniciar sesión."), 401
     if not usuario.puede_operar:
         return jsonify(error="No tienes permiso para cambiar el servicio."), 403
-    articulo = db.session.get(ArticuloInventario, id_articulo)
+    articulo = _articulo_activo(id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
     datos = request.get_json(silent=True)
@@ -620,7 +620,7 @@ def retirar_articulo(id_articulo: int):
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
-    articulo = db.session.get(ArticuloInventario, id_articulo)
+    articulo = _articulo_activo(id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 
@@ -694,7 +694,7 @@ def ingresar_articulo(id_articulo: int):
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
-    articulo = db.session.get(ArticuloInventario, id_articulo)
+    articulo = _articulo_activo(id_articulo)
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 

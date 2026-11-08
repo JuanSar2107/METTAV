@@ -35,6 +35,7 @@ def app(tmp_path):
             else f"sqlite:///{(tmp_path / 'test.sqlite3').as_posix()}",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "DOCUMENTOS_FOLDER": str(tmp_path / "documentos"),
+            "RESPALDOS_FOLDER": str(tmp_path / "respaldos"),
         }
     )
     # Las imágenes subidas van a una carpeta temporal, no a la del proyecto

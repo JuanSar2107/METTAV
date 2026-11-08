@@ -57,6 +57,9 @@ class Remision(db.Model):
     lineas = db.relationship(
         "RemisionLinea", back_populates="remision", order_by="RemisionLinea.id", cascade="all, delete-orphan"
     )
+    anulado_en = db.Column(db.DateTime)
+    anulado_por = db.Column(db.String(80))
+    motivo_anulacion = db.Column(db.Text)
 
     @property
     def numero(self) -> str:
@@ -81,6 +84,8 @@ class Remision(db.Model):
             "usuario": self.usuario,
             "fecha_hora": self.fecha_hora.replace(tzinfo=timezone.utc).isoformat(timespec="seconds"),
             "lineas": [linea.to_dict() for linea in self.lineas],
+            "anulada": self.anulado_en is not None,
+            "motivo_anulacion": self.motivo_anulacion,
         }
 
 
@@ -98,6 +103,8 @@ class RemisionLinea(db.Model):
     valor_fob_usd = db.Column(db.Numeric(14, 2))
     cantidad = db.Column(db.Integer, nullable=False)
     estado_servicio = db.Column(db.String(20))
+    # Estado que tenía el artículo antes de la remisión, para devolverlo si se anula.
+    estado_servicio_anterior = db.Column(db.String(20))
     remision = db.relationship("Remision", back_populates="lineas")
 
     def to_dict(self):
@@ -168,6 +175,9 @@ class SalidaIntegrada(db.Model):
         db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
     movimientos = db.relationship("MovimientoInventario", back_populates="salida", order_by="MovimientoInventario.id")
+    anulado_en = db.Column(db.DateTime)
+    anulado_por = db.Column(db.String(80))
+    motivo_anulacion = db.Column(db.Text)
 
     def to_dict(self):
         fecha_hora = self.fecha_hora.replace(tzinfo=timezone.utc)
@@ -182,6 +192,8 @@ class SalidaIntegrada(db.Model):
             "usuario": self.usuario,
             "fecha_hora": fecha_hora.isoformat(timespec="seconds"),
             "movimientos": [movimiento.to_dict() for movimiento in self.movimientos],
+            "anulada": self.anulado_en is not None,
+            "motivo_anulacion": self.motivo_anulacion,
         }
 
 
@@ -212,6 +224,10 @@ class ArticuloInventario(db.Model):
     cliente = db.Column(db.String(160))
     tipo_servicio = db.Column(db.String(30))
     estado_servicio = db.Column(db.String(20))
+    # Dado de baja: sale del inventario, pero conserva su código y su historia.
+    dado_de_baja_en = db.Column(db.DateTime)
+    dado_de_baja_por = db.Column(db.String(80))
+    motivo_baja = db.Column(db.Text)
     nombre = db.Column(db.String(120), nullable=False)
     categoria = db.Column(db.String(60), nullable=False)
     descripcion = db.Column(db.Text, nullable=False)
@@ -255,6 +271,10 @@ class MovimientoInventario(db.Model):
     # Documento soporte del ingreso: nombre en disco y nombre original del archivo.
     documento_archivo = db.Column(db.String(80))
     documento_nombre = db.Column(db.String(200))
+    # Anulación: el registro se conserva marcado y el stock se devuelve.
+    anulado_en = db.Column(db.DateTime)
+    anulado_por = db.Column(db.String(80))
+    motivo_anulacion = db.Column(db.Text)
 
     def to_dict(self):
         fecha_hora = self.fecha_hora
@@ -282,6 +302,9 @@ class MovimientoInventario(db.Model):
             "id_remision": self.id_remision,
             "documento_nombre": self.documento_nombre,
             "documento_url": f"/api/inventario/movimientos/{self.id}/documento" if self.documento_archivo else None,
+            "anulado": self.anulado_en is not None,
+            "anulado_por": self.anulado_por,
+            "motivo_anulacion": self.motivo_anulacion,
         }
 
 

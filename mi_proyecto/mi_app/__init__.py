@@ -89,6 +89,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         # Documentos soporte de los ingresos: privados, fuera de /static y dentro
         # de instance/, que en Docker es un volumen persistente.
         DOCUMENTOS_FOLDER=str(database_path.parent / "documentos"),
+        RESPALDOS_FOLDER=str(database_path.parent / "respaldos"),
     )
     if test_config is not None:
         app.config.update(test_config)
@@ -170,6 +171,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             "id_remision": "INTEGER REFERENCES remisiones (id)",
             "documento_archivo": "VARCHAR(80)",
             "documento_nombre": "VARCHAR(200)",
+            "anulado_en": "TIMESTAMP",
+            "anulado_por": "VARCHAR(80)",
+            "motivo_anulacion": "TEXT",
         }
         missing_movement_columns = {
             column_name: column_type
@@ -230,6 +234,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             "cliente": "VARCHAR(160)",
             "tipo_servicio": "VARCHAR(30)",
             "estado_servicio": "VARCHAR(20)",
+            "dado_de_baja_en": "TIMESTAMP",
+            "dado_de_baja_por": "VARCHAR(80)",
+            "motivo_baja": "TEXT",
         }
         missing_article_columns = {
             column_name: column_type
@@ -242,6 +249,23 @@ def create_app(test_config: dict | None = None) -> Flask:
                     connection.execute(
                         text(f"ALTER TABLE articulos_inventario ADD COLUMN {column_name} {column_type}")
                     )
+
+        columnas_anulacion = {
+            "anulado_en": "TIMESTAMP",
+            "anulado_por": "VARCHAR(80)",
+            "motivo_anulacion": "TEXT",
+        }
+        for tabla, nuevas in (
+            ("salidas_integradas", columnas_anulacion),
+            ("remisiones", columnas_anulacion),
+            ("remision_lineas", {"estado_servicio_anterior": "VARCHAR(20)"}),
+        ):
+            existentes = {column["name"] for column in inspect(db.engine).get_columns(tabla)}
+            faltantes = {nombre: tipo for nombre, tipo in nuevas.items() if nombre not in existentes}
+            if faltantes:
+                with db.engine.begin() as connection:
+                    for nombre, tipo in faltantes.items():
+                        connection.execute(text(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {tipo}"))
 
         indexes = inspect(db.engine).get_indexes("usuarios")
         constraints = inspect(db.engine).get_unique_constraints("usuarios")
