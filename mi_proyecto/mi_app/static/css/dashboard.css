@@ -363,6 +363,37 @@ body {
     font-size: 16px;
 }
 
+.inventory-heading--compact {
+    margin-bottom: 20px;
+}
+
+/* Barra de acciones del inventario: dos filas de botones del mismo ancho. */
+.inventory-actions {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 26px;
+}
+
+.inventory-actions-group.export-buttons {
+    display: grid;
+}
+
+.inventory-actions-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.inventory-actions-group > button {
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .inventory-actions-group {
+        grid-template-columns: 1fr;
+    }
+}
+
 .inventory-summary {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

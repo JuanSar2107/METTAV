@@ -98,13 +98,15 @@
             {% endif %}
 
             <div id="section-inventory" class="dashboard-tab-panel">
-                <div class="inventory-heading">
+                <div class="inventory-heading inventory-heading--compact">
                 <div>
                     <p class="eyebrow">GESTIÓN DE BODEGA</p>
                     <h1 id="dashboard-title">Inventario</h1>
                     <p class="welcome-message">Bienvenido, {{ usuario.usuario }}. Consulta y administra tus artículos.</p>
                 </div>
-                <div class="inventory-heading-actions">
+                </div>
+                <div class="inventory-actions">
+                    <div class="inventory-actions-group">
                     <button class="btn-add-user" id="open-stock-entry" type="button">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M12 21V9m-5 5 5-5 5 5M4 3h16" />
@@ -123,8 +125,9 @@
                         </svg>
                         <span>Remisión de salida</span>
                     </button>
+                    </div>
                     {% if es_admin %}
-                    <div class="admin-action-buttons">
+                    <div class="inventory-actions-group">
                         <button class="btn-add-item" id="open-add-item" type="button">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M12 5v14M5 12h14" />
@@ -146,7 +149,6 @@
                     </div>
                     {% endif %}
                 </div>
-            </div>
 
             <section class="inventory-summary inventory-summary--cards" aria-label="Resumen del inventario">
                 <article class="summary-item summary-item--items">
@@ -285,28 +287,28 @@
 
             {% if es_admin %}
             <div id="section-users" class="dashboard-tab-panel is-hidden">
-                <div class="inventory-heading">
+                <div class="inventory-heading inventory-heading--compact">
                     <div>
                         <p class="eyebrow">ADMINISTRACIÓN DE PERSONAL</p>
                         <h2 class="section-heading-title">Usuarios y Empleados</h2>
                         <p class="welcome-message">Directorio de usuarios registrados y colaboradores del sistema METTAV.</p>
                     </div>
-                    <div class="inventory-heading-actions">
-                        <div class="export-buttons" data-export-url="{{ url_for('usuarios.listar_usuarios') }}" data-export-scope="usuarios">
-                            <button class="btn-add-user" type="button" data-export-format="xlsx">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
-                                <span>Descargar Excel</span>
-                            </button>
-                            <button class="btn-add-user" type="button" data-export-format="pdf">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
-                                <span>Descargar PDF</span>
-                            </button>
-                        </div>
-                        <button class="btn-add-user" id="open-add-user-from-panel" type="button">
+                </div>
+                <div class="inventory-actions">
+                    <div class="inventory-actions-group export-buttons" data-export-url="{{ url_for('usuarios.listar_usuarios') }}" data-export-scope="usuarios">
+                        <button class="btn-add-item" id="open-add-user-from-panel" type="button">
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-2v6m-3-3h6" />
                             </svg>
                             <span>Agregar usuario nuevo</span>
+                        </button>
+                        <button class="btn-add-user" type="button" data-export-format="xlsx">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
+                            <span>Descargar Excel</span>
+                        </button>
+                        <button class="btn-add-user" type="button" data-export-format="pdf">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 21h16" /></svg>
+                            <span>Descargar PDF</span>
                         </button>
                     </div>
                 </div>
