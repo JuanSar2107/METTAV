@@ -417,7 +417,7 @@
 
             {% if puede_operar %}
             <div id="section-movements" class="dashboard-tab-panel is-hidden">
-                <div class="movement-history" id="movement-history" data-movements-url="{{ url_for('inventario.listar_movimientos') }}">
+                <div class="movement-history" id="movement-history" data-movements-url="{{ url_for('inventario.listar_movimientos') }}"{% if es_admin %} data-can-annul="1"{% endif %}>
                     <div class="inventory-heading movement-history-heading">
                         <div>
                             <p class="eyebrow">REGISTRO DE BODEGA</p>
@@ -574,6 +574,23 @@
                             <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
                         </div>
                     </form>
+                    <form class="report-card" data-report="bajas" data-report-url="{{ url_for('reportes.reporte_bajas') }}"{% if es_admin %} data-can-reactivate="1"{% endif %}>
+                        <h3>Artículos dados de baja</h3>
+                        <p class="report-note">Salieron del inventario, pero conservan su código y su historial. Desde aquí se pueden reactivar.</p>
+                        <div class="report-actions">
+                            <button class="withdraw-button" type="submit">Ver</button>
+                            <button class="btn-dialog-secondary" type="button" data-download>Descargar Excel</button>
+                        </div>
+                    </form>
+                    {% if es_admin %}
+                    <div class="report-card">
+                        <h3>Copia de seguridad</h3>
+                        <p class="report-note">Descarga toda la información: datos, documentos e imágenes. Guárdala fuera del servidor y en un lugar seguro, porque contiene información sensible.</p>
+                        <div class="export-buttons" data-export-url="{{ url_for('reportes.descargar_respaldo') }}" data-export-scope="respaldo" data-export-method="POST">
+                            <button class="withdraw-button" type="button" data-export-format="zip"><span>Descargar copia</span></button>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 <p class="movement-history-message" id="report-message" role="status" aria-live="polite">Elige un reporte para verlo aquí.</p>
                 <div class="report-summary" id="report-summary" hidden></div>

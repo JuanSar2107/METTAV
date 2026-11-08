@@ -181,13 +181,22 @@
     document.querySelectorAll(".delete-item").forEach((button) => {
         button.addEventListener("click", async () => {
             const card = button.closest(".inventory-card");
-            if (!card || !window.confirm(`¿Eliminar "${card.dataset.name}" del inventario?`)) {
-                return;
-            }
+            if (!card) return;
+            const motivo = window.prompt(
+                `¿Quitar "${card.dataset.name}" del inventario?\n\n`
+                + "Si tiene movimientos no se borra: queda dado de baja, conserva su historial "
+                + "y se puede reactivar desde Reportes.\n\nMotivo (opcional):",
+                "",
+            );
+            if (motivo === null) return;
 
             button.disabled = true;
             try {
-                const response = await fetch(card.dataset.deleteUrl, { method: "DELETE" });
+                const response = await fetch(card.dataset.deleteUrl, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ motivo }),
+                });
                 const result = await response.json();
                 if (!response.ok) {
                     throw new Error(result.error || "No se pudo eliminar el artículo.");
@@ -1157,6 +1166,10 @@
                 ].filter(Boolean).join(", ");
                 if (sizfra) lines.push(`Sizfra: ${sizfra}`);
                 if (evento.observaciones) lines.push(`Observaciones: ${evento.observaciones}`);
+                if (evento.anulado) {
+                    title.textContent += " (ANULADO)";
+                    lines.push(`Anulado por @${evento.anulado_por}: ${evento.motivo_anulacion}`);
+                }
             } else {
                 item.className = "trace-entry trace-entry--audit";
                 title.textContent = evento.accion;
@@ -1472,6 +1485,22 @@
                 movimiento.formulario ? `Form. ${movimiento.formulario}` : "",
             ].filter(Boolean);
             sizfraCell.textContent = sizfraParts.join(" · ") || "—";
+            if (movimiento.anulado) {
+                row.classList.add("movement-row--annulled");
+                const badge = document.createElement("span");
+                badge.className = "movement-type-badge movement-type-badge--annulled";
+                badge.textContent = "Anulado";
+                const reason = document.createElement("small");
+                reason.textContent = `Motivo: ${movimiento.motivo_anulacion} (@${movimiento.anulado_por})`;
+                typeCell.append(badge, reason);
+            } else if (movementHistory.dataset.canAnnul) {
+                const annulButton = document.createElement("button");
+                annulButton.type = "button";
+                annulButton.className = "movement-annul-button";
+                annulButton.textContent = "Anular";
+                annulButton.addEventListener("click", () => annulMovement(movimiento, annulButton));
+                typeCell.append(annulButton);
+            }
             row.append(dateCell, employeeCell, typeCell, articleCell, quantityCell, sizfraCell);
             movementTableBody.append(row);
         });
@@ -1479,6 +1508,38 @@
         movementHistoryMessage.hidden = true;
         movementTableWrap.hidden = false;
     };
+
+    async function annulMovement(movimiento, button) {
+        const alcance = movimiento.id_salida
+            ? `Se anulará TODA la salida integrada #${movimiento.id_salida}, con todas sus líneas.`
+            : movimiento.id_remision
+                ? "Se anulará TODA la remisión, con todas sus líneas."
+                : `Se anulará: ${movimiento.tipo} de ${movimiento.cantidad} ${movimiento.unidad} de ${movimiento.articulo}.`;
+        const motivo = window.prompt(
+            `${alcance}\nEl stock se corrige solo y el registro queda visible como anulado.\n\nMotivo de la anulación:`,
+            "",
+        );
+        if (motivo === null) return;
+        if (!motivo.trim()) {
+            window.alert("Debes indicar el motivo de la anulación.");
+            return;
+        }
+        button.disabled = true;
+        try {
+            const response = await fetch(`/api/inventario/movimientos/${movimiento.id}/anular`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ motivo }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "No se pudo anular el movimiento.");
+            // Se recarga para que el stock de las tarjetas también quede al día.
+            window.location.reload();
+        } catch (error) {
+            window.alert(error.message || "No se pudo conectar con el servidor.");
+            button.disabled = false;
+        }
+    }
 
     const loadMovementHistory = async () => {
         if (
@@ -1566,6 +1627,7 @@
             ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
             ["Sizfra", (f) => [f.operacion_sizfra && `Op. ${f.operacion_sizfra}`, f.formulario && `Form. ${f.formulario}`].filter(Boolean).join(" · ")],
             ["Empleado", (f) => f.empleado],
+            ["Estado", (f) => (f.anulado ? "Anulado" : "Vigente")],
         ],
         salidas: [
             ["Salida", (f) => `#${f.salida}`],
@@ -1575,6 +1637,7 @@
             ["Rol", (f) => (f.rol === "Principal" ? "Equipo" : "Parte")],
             ["Artículo", (f) => `${f.codigo_articulo} · ${f.articulo}`],
             ["Cantidad", (f) => `${f.cantidad} ${f.unidad}`],
+            ["Estado", (f) => (f.anulado ? "Anulada" : "Vigente")],
         ],
         remisiones: [
             ["Número", (f) => {
@@ -1590,6 +1653,36 @@
             ["Servicio", (f) => f.tipo_servicio || ""],
             ["Artículos", (f) => f.lineas.map((l) => `${l.cantidad} × ${l.codigo}`).join(", ")],
             ["Sizfra", (f) => [f.operacion_sizfra && `Op. ${f.operacion_sizfra}`, f.formulario && `Form. ${f.formulario}`].filter(Boolean).join(" · ")],
+            ["Estado", (f) => (f.anulada ? "Anulada" : "Vigente")],
+        ],
+        bajas: [
+            ["Código", (f) => f.codigo],
+            ["Artículo", (f) => f.nombre],
+            ["Stock", (f) => `${f.stock} ${f.unidad}`],
+            ["Fecha", (f) => f.fecha],
+            ["Usuario", (f) => f.por],
+            ["Motivo", (f) => f.motivo || ""],
+            ["", (f) => {
+                if (!document.querySelector('[data-report="bajas"]').dataset.canReactivate) return "";
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "movement-annul-button";
+                button.textContent = "Reactivar";
+                button.addEventListener("click", async () => {
+                    if (!window.confirm(`¿Devolver ${f.codigo} al inventario con ${f.stock} ${f.unidad}?`)) return;
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(`/api/inventario/${f.id}/reactivar`, { method: "POST" });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.error || "No se pudo reactivar el artículo.");
+                        window.location.reload();
+                    } catch (error) {
+                        window.alert(error.message || "No se pudo conectar con el servidor.");
+                        button.disabled = false;
+                    }
+                });
+                return button;
+            }],
         ],
         conciliacion: [
             ["Estado", (f) => f.estado],
@@ -1607,7 +1700,10 @@
         }
         if (report === "movimientos") {
             const r = result.resumen;
-            return [`${r.ingresos} ingresos (${r.unidades_ingresadas} unidades) y ${r.retiros} retiros (${r.unidades_retiradas} unidades).`];
+            return [`${r.ingresos} ingresos (${r.unidades_ingresadas} unidades) y ${r.retiros} retiros (${r.unidades_retiradas} unidades).${r.anulados ? ` ${r.anulados} anulados, no incluidos en estos totales.` : ""}`];
+        }
+        if (report === "bajas") {
+            return [`${result.total} artículos dados de baja.`];
         }
         if (report === "salidas") {
             return [`${result.total} salidas integradas.`];
@@ -1750,6 +1846,7 @@
             q: document.querySelector("#users-search")?.value.trim() || "",
             rol: document.querySelector("#users-role-filter")?.value || "",
         }),
+        respaldo: () => ({}),
     };
 
     document.querySelectorAll(".export-buttons").forEach((group) => {
@@ -1764,7 +1861,9 @@
                 button.disabled = true;
                 label.textContent = "Generando...";
                 try {
-                    const response = await fetch(`${group.dataset.exportUrl}?${params}`);
+                    const response = await fetch(`${group.dataset.exportUrl}?${params}`, {
+                        method: group.dataset.exportMethod || "GET",
+                    });
                     if (!response.ok) {
                         const result = await response.json().catch(() => ({}));
                         throw new Error(result.error || "No se pudo generar el archivo.");

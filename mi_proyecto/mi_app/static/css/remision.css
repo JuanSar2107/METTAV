@@ -206,3 +206,11 @@ h2 {
         print-color-adjust: exact;
     }
 }
+
+.annulled-banner {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border: 2px solid #a12626;
+    color: #a12626;
+    text-align: center;
+}

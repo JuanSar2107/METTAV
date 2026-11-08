@@ -98,13 +98,8 @@ def test_anular_ingreso_sin_unidades_no_cambia_nada(client, app, admin):
 
 def test_anular_una_linea_anula_toda_la_salida(client, app, admin):
     equipo, parte = _articulo(app, "ZF-EQ-CO-001"), _articulo(app, "ZF-EQ-CO-002")
-    salida = client.post("/api/inventario/salidas-integradas", json={
-        "principal": {"id": equipo, "cantidad": 1},
-        "componentes": [{"id": parte, "cantidad": 4}],
-        "proceso": "Reparación" if False else None,
-    })
-    # El proceso válido se toma de la lista oficial para no atar el test a un texto.
     from mi_app.models.inventory import PROCESOS_INTEGRACION
+
     salida = client.post("/api/inventario/salidas-integradas", json={
         "principal": {"id": equipo, "cantidad": 1},
         "componentes": [{"id": parte, "cantidad": 4}],
@@ -135,8 +130,9 @@ def test_anular_remision_restaura_estado_y_marca_el_documento(client, app, admin
         assert db.session.get(Remision, id_remision).anulado_en is not None
     assert "REMISIÓN ANULADA" in client.get(f"/remisiones/{id_remision}").get_data(as_text=True)
     # El consecutivo de una remisión anulada no se reutiliza.
-    siguiente = _remision(client, id_articulo).get_json()["remision"]
-    assert siguiente["consecutivo"] == 2
+    _remision(client, id_articulo)
+    with app.app_context():
+        assert db.session.query(db.func.max(Remision.consecutivo)).scalar() == 2
 
 
 def test_reporte_no_suma_anulados(client, app, admin):

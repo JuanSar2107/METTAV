@@ -33,7 +33,9 @@ def test_dashboard_con_sesion_siembra_inventario(client, app, creador_usuarios, 
         assert db.session.query(ArticuloInventario).count() == 6
 
 
-def test_docs_devuelve_rutas(client):
+def test_docs_devuelve_rutas(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("empleado")
+    iniciar_sesion("empleado")
     respuesta = client.get("/docs")
     assert respuesta.status_code == 200
     datos = respuesta.get_json()
