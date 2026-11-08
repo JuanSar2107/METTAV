@@ -7,11 +7,13 @@ archivo de Excel para las auditorías de la zona franca.
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, send_file
 
 from mi_app.exportar import respuesta_excel as _excel
-from mi_app.models import ArticuloInventario, MovimientoInventario, SalidaIntegrada
+from mi_app.extensions import db
+from mi_app.models import ArticuloInventario, MovimientoInventario, RegistroAuditoria, SalidaIntegrada
 from mi_app.models.inventory import GRUPOS_INVENTARIO
+from mi_app.respaldos import crear_respaldo_de_la_app
 from mi_app.security import usuario_actual
 from mi_app.zona_franca import leer_saldos_sizfra
 
@@ -73,7 +75,7 @@ def reporte_inventario():
     if error is not None:
         return error
 
-    consulta = ArticuloInventario.query
+    consulta = ArticuloInventario.query.filter(ArticuloInventario.dado_de_baja_en.is_(None))
     grupo = (request.args.get("grupo") or "").strip()
     categoria = (request.args.get("categoria") or "").strip()
     texto = (request.args.get("q") or "").strip()
@@ -171,11 +173,14 @@ def reporte_movimientos():
     movimientos = consulta.order_by(MovimientoInventario.fecha_hora, MovimientoInventario.id).all()
 
     filas = [m.to_dict() for m in movimientos]
+    # Los anulados se listan marcados, pero no cuentan en los totales.
+    vigentes = [m for m in movimientos if m.anulado_en is None]
     resumen = {
-        "ingresos": sum(1 for m in movimientos if m.tipo == "Ingreso"),
-        "retiros": sum(1 for m in movimientos if m.tipo == "Retiro"),
-        "unidades_ingresadas": sum(m.cantidad for m in movimientos if m.tipo == "Ingreso"),
-        "unidades_retiradas": sum(m.cantidad for m in movimientos if m.tipo == "Retiro"),
+        "ingresos": sum(1 for m in vigentes if m.tipo == "Ingreso"),
+        "retiros": sum(1 for m in vigentes if m.tipo == "Retiro"),
+        "unidades_ingresadas": sum(m.cantidad for m in vigentes if m.tipo == "Ingreso"),
+        "unidades_retiradas": sum(m.cantidad for m in vigentes if m.tipo == "Retiro"),
+        "anulados": len(movimientos) - len(vigentes),
     }
 
     if _quiere_excel():
@@ -183,10 +188,11 @@ def reporte_movimientos():
             "Movimientos",
             ["Fecha (hora Colombia)", "Tipo", "Código", "Artículo", "Categoría", "Cantidad", "Unidad",
              "Operación Sizfra", "Formulario", "Origen", "Salida integrada", "Rol", "Referencia",
-             "Observaciones", "Empleado", "Usuario"],
+             "Observaciones", "Empleado", "Usuario", "Estado", "Motivo de anulación"],
             [[hora_colombia(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad,
               m.unidad, m.operacion_sizfra, m.formulario, m.origen, m.id_salida, m.rol,
-              m.salida.referencia if m.salida else None, m.observaciones, m.empleado, m.usuario]
+              m.salida.referencia if m.salida else None, m.observaciones, m.empleado, m.usuario,
+              "Anulado" if m.anulado_en else "Vigente", m.motivo_anulacion]
              for m in movimientos],
             "reporte-movimientos",
         )
@@ -215,13 +221,69 @@ def reporte_salidas_integradas():
         return _excel(
             "Salidas integradas",
             ["Salida", "Fecha (hora Colombia)", "Proceso", "Referencia del equipo", "Rol", "Código",
-             "Artículo", "Cantidad", "Unidad", "Operación Sizfra", "Formulario", "Observaciones", "Empleado"],
+             "Artículo", "Cantidad", "Unidad", "Operación Sizfra", "Formulario", "Observaciones", "Empleado",
+             "Estado", "Motivo de anulación"],
             [[s.id, hora_colombia(s.fecha_hora), s.proceso, s.referencia, m.rol, m.codigo_articulo,
-              m.articulo, m.cantidad, m.unidad, s.operacion_sizfra, s.formulario, s.observaciones, s.empleado]
+              m.articulo, m.cantidad, m.unidad, s.operacion_sizfra, s.formulario, s.observaciones, s.empleado,
+              "Anulada" if s.anulado_en else "Vigente", s.motivo_anulacion]
              for s in salidas for m in s.movimientos],
             "reporte-salidas-integradas",
         )
     return jsonify(total=len(salidas), salidas=[s.to_dict() for s in salidas])
+
+
+@reportes_bp.get("/bajas")
+def reporte_bajas():
+    """Artículos dados de baja: salieron del inventario, pero conservan su historia."""
+    error = _error_admin()
+    if error is not None:
+        return error
+    articulos = (
+        ArticuloInventario.query.filter(ArticuloInventario.dado_de_baja_en.isnot(None))
+        .order_by(ArticuloInventario.dado_de_baja_en.desc())
+        .all()
+    )
+    filas = [{
+        "id": a.id,
+        "codigo": a.codigo,
+        "nombre": a.nombre,
+        "stock": a.stock,
+        "unidad": a.unidad,
+        "fecha": hora_colombia(a.dado_de_baja_en),
+        "por": a.dado_de_baja_por,
+        "motivo": a.motivo_baja,
+    } for a in articulos]
+    if _quiere_excel():
+        return _excel(
+            "Dados de baja",
+            ["Código", "Artículo", "Stock al darlo de baja", "Unidad", "Fecha (hora Colombia)", "Usuario", "Motivo"],
+            [[f["codigo"], f["nombre"], f["stock"], f["unidad"], f["fecha"], f["por"], f["motivo"]] for f in filas],
+            "articulos-dados-de-baja",
+        )
+    return jsonify(total=len(filas), filas=filas)
+
+
+@reportes_bp.post("/respaldo")
+def descargar_respaldo():
+    """Genera una copia de seguridad completa y la descarga (solo administradores)."""
+    usuario = usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.es_admin:
+        return jsonify(error="Solo un administrador puede descargar copias de seguridad."), 403
+    try:
+        ruta = crear_respaldo_de_la_app()
+    except Exception:
+        current_app.logger.exception("No se pudo crear la copia de seguridad")
+        return jsonify(error="No se pudo crear la copia de seguridad."), 500
+    db.session.add(RegistroAuditoria(
+        accion="Descargar copia de seguridad",
+        detalle=ruta.name,
+        empleado=usuario.nombre_completo or usuario.usuario,
+        usuario=usuario.usuario,
+    ))
+    db.session.commit()
+    return send_file(ruta, mimetype="application/zip", as_attachment=True, download_name=ruta.name)
 
 
 @reportes_bp.post("/conciliacion")
@@ -245,7 +307,7 @@ def conciliacion():
 
     solo_zf = (request.form.get("solo_zf") or "1") != "0"
     articulos = {
-        a.codigo: a for a in ArticuloInventario.query.all()
+        a.codigo: a for a in ArticuloInventario.query.filter(ArticuloInventario.dado_de_baja_en.is_(None))
         if not solo_zf or a.codigo.startswith("ZF-")
     }
     if solo_zf:

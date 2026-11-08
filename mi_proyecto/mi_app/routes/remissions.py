@@ -95,7 +95,12 @@ def crear_remision():
     if len(set(ids)) != len(ids):
         return jsonify(error="Un mismo artículo no puede aparecer dos veces en la remisión."), 400
 
-    articulos = {a.id: a for a in ArticuloInventario.query.filter(ArticuloInventario.id.in_(ids))}
+    articulos = {
+        a.id: a
+        for a in ArticuloInventario.query.filter(
+            ArticuloInventario.id.in_(ids), ArticuloInventario.dado_de_baja_en.is_(None)
+        )
+    }
     if len(articulos) != len(ids):
         return jsonify(error="Alguno de los artículos ya no existe. Recarga la página."), 404
 
@@ -136,6 +141,7 @@ def crear_remision():
             valor_fob_usd=articulo.valor_fob_usd,
             cantidad=linea["cantidad"],
             estado_servicio=linea["estado_servicio"],
+            estado_servicio_anterior=articulo.estado_servicio,
         ))
         articulo.estado_servicio = linea["estado_servicio"]
         if not articulo.cliente:
@@ -173,6 +179,9 @@ def listar_remisiones():
     if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
     consulta = Remision.query
+    # Quien no opera el inventario solo ve las remisiones que él mismo creó.
+    if not usuario.puede_operar:
+        consulta = consulta.filter(Remision.usuario == usuario.usuario)
     for parametro, comparar in (("desde", Remision.fecha.__ge__), ("hasta", Remision.fecha.__le__)):
         texto = (request.args.get(parametro) or "").strip()
         if texto:
@@ -198,9 +207,10 @@ def listar_remisiones():
 @remisiones_bp.get("/remisiones/<int:id_remision>")
 def ver_remision(id_remision: int):
     """Página de la remisión lista para imprimir o guardar como PDF."""
-    if usuario_actual() is None:
+    usuario = usuario_actual()
+    if usuario is None:
         return redirect(url_for("main.login"))
     remision = db.session.get(Remision, id_remision)
-    if remision is None:
+    if remision is None or not (usuario.puede_operar or remision.usuario == usuario.usuario):
         return render_template("remision.html", remision=None, empresa=EMPRESA), 404
     return render_template("remision.html", remision=remision, empresa=EMPRESA)

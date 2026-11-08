@@ -19,6 +19,9 @@
 <main class="sheet"><p>La remisión no existe.</p></main>
 {% else %}
 <main class="sheet">
+    {% if remision.anulado_en %}
+    <p class="annulled-banner"><strong>REMISIÓN ANULADA.</strong> Motivo: {{ remision.motivo_anulacion }}</p>
+    {% endif %}
     <header class="sheet-header">
         <div class="company">
             <img src="{{ url_for('static', filename='images/mettav-logo.png') }}" alt="METTAV Group SAS">

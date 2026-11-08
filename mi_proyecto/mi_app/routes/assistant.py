@@ -91,11 +91,14 @@ def _contexto_inventario(usuario: Usuario) -> str:
     y auxiliares de inventarios; los usuarios, solo de administradores.
     """
     articulos = (
-        ArticuloInventario.query.order_by(ArticuloInventario.grupo, ArticuloInventario.codigo)
+        ArticuloInventario.query.filter(ArticuloInventario.dado_de_baja_en.is_(None))
+        .order_by(ArticuloInventario.grupo, ArticuloInventario.codigo)
         .limit(_MAX_ARTICULOS)
         .all()
     )
-    total_articulos = db.session.query(ArticuloInventario.id).count()
+    total_articulos = (
+        db.session.query(ArticuloInventario.id).filter(ArticuloInventario.dado_de_baja_en.is_(None)).count()
+    )
     lineas = [
         f"INVENTARIO ACTUAL ({total_articulos} artículos"
         + (f", se muestran los primeros {_MAX_ARTICULOS}" if total_articulos > _MAX_ARTICULOS else "")
@@ -112,6 +115,7 @@ def _contexto_inventario(usuario: Usuario) -> str:
             db.func.count(ArticuloInventario.id),
             db.func.sum(ArticuloInventario.stock),
         )
+        .filter(ArticuloInventario.dado_de_baja_en.is_(None))
         .group_by(ArticuloInventario.grupo)
         .order_by(ArticuloInventario.grupo)
         .all()
@@ -128,7 +132,10 @@ def _contexto_inventario(usuario: Usuario) -> str:
         .all()
     )
     lineas += ["", f"ÚLTIMOS MOVIMIENTOS (máximo {_MAX_MOVIMIENTOS}; hora Colombia | tipo | cantidad | artículo | empleado | otros datos):"]
-    lineas += [_linea_movimiento(m) for m in movimientos] or ["- (sin movimientos registrados)"]
+    lineas += [
+        _linea_movimiento(m) + (f" | ANULADO: {m.motivo_anulacion}" if m.anulado_en else "")
+        for m in movimientos
+    ] or ["- (sin movimientos registrados)"]
 
     salidas = (
         SalidaIntegrada.query.order_by(SalidaIntegrada.fecha_hora.desc()).limit(_MAX_SALIDAS).all()
@@ -136,7 +143,7 @@ def _contexto_inventario(usuario: Usuario) -> str:
     lineas += ["", f"ÚLTIMAS {_MAX_SALIDAS} SALIDAS INTEGRADAS (partes integradas a un equipo):"]
     for s in salidas:
         lineas.append(
-            f"- Salida #{s.id} | {hora_colombia(s.fecha_hora)} | {s.proceso} | equipo: {s.referencia} | "
+            f"- Salida #{s.id}{' (ANULADA)' if s.anulado_en else ''} | {hora_colombia(s.fecha_hora)} | {s.proceso} | equipo: {s.referencia} | "
             + _detalles([("operación Sizfra", s.operacion_sizfra), ("formulario", s.formulario),
                          ("empleado", s.empleado), ("observaciones", s.observaciones)])
         )
@@ -151,7 +158,7 @@ def _contexto_inventario(usuario: Usuario) -> str:
     lineas += ["", f"ÚLTIMAS {_MAX_REMISIONES} REMISIONES DE SALIDA (entregas a clientes):"]
     for r in remisiones:
         lineas.append(
-            f"- {r.numero} | {r.fecha.isoformat()} | cliente {r.cliente_nombre} (NIT {r.cliente_nit}) | "
+            f"- {r.numero}{' (ANULADA)' if r.anulado_en else ''} | {r.fecha.isoformat()} | cliente {r.cliente_nombre} (NIT {r.cliente_nit}) | "
             + _detalles([("servicio", r.tipo_servicio), ("operación Sizfra", r.operacion_sizfra),
                          ("formulario", r.formulario), ("empleado", r.empleado), ("observaciones", r.observaciones)])
         )

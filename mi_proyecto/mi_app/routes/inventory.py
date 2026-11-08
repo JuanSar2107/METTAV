@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from collections import Counter
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request, send_file, url_for
@@ -17,6 +18,7 @@ from mi_app.models import (
     Categoria,
     MovimientoInventario,
     RegistroAuditoria,
+    Remision,
     SalidaIntegrada,
     Usuario,
 )
@@ -135,6 +137,58 @@ def _error_admin():
         return jsonify(error="Debes iniciar sesión."), 401
     if not usuario.es_admin:
         return jsonify(error="Solo un administrador puede gestionar los artículos."), 403
+    return None
+
+
+def _ahora_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _articulo_activo(id_articulo: int) -> ArticuloInventario | None:
+    """El artículo, si existe y no está dado de baja: sobre una baja no se opera."""
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    if articulo is None or articulo.dado_de_baja_en is not None:
+        return None
+    return articulo
+
+
+def _sumar_stock(id_articulo: int, cantidad: int) -> int:
+    """Suma unidades; stock_maximo guarda el stock más alto alcanzado. Devuelve filas tocadas."""
+    return db.session.execute(
+        update(ArticuloInventario)
+        .where(ArticuloInventario.id == id_articulo)
+        .values(
+            stock=ArticuloInventario.stock + cantidad,
+            stock_maximo=case(
+                (
+                    ArticuloInventario.stock + cantidad > ArticuloInventario.stock_maximo,
+                    ArticuloInventario.stock + cantidad,
+                ),
+                else_=ArticuloInventario.stock_maximo,
+            ),
+        )
+    ).rowcount
+
+
+def _revertir_stock(codigo: str, tipo: str, cantidad: int) -> str | None:
+    """Deshace el efecto de un movimiento en el stock; devuelve el motivo si no se puede."""
+    articulo = ArticuloInventario.query.filter_by(codigo=codigo).first()
+    if articulo is None:
+        return f"El artículo {codigo} ya no existe; no se puede devolver su stock."
+    if articulo.dado_de_baja_en is not None:
+        return f"El artículo {codigo} está dado de baja. Reactívalo antes de anular."
+    if tipo != "Ingreso":
+        _sumar_stock(articulo.id, cantidad)
+        return None
+    disponibles = articulo.stock
+    resultado = db.session.execute(
+        update(ArticuloInventario)
+        .where(ArticuloInventario.id == articulo.id, ArticuloInventario.stock >= cantidad)
+        .values(stock=ArticuloInventario.stock - cantidad)
+    )
+    if resultado.rowcount == 0:
+        return (f"No se puede anular el ingreso de {codigo}: se necesitan {cantidad} unidades "
+                f"y solo quedan {disponibles}. Anula primero las salidas que las usaron.")
     return None
 
 
@@ -378,6 +432,13 @@ def importar_excel():
             continue
 
         articulo = existentes.get(codigo)
+        if articulo is not None and articulo.dado_de_baja_en is not None:
+            errores.append({
+                "fila": fila["fila"],
+                "codigo": codigo,
+                "error": "Ese código está dado de baja; reactívalo en Reportes si debe volver al inventario.",
+            })
+            continue
         if articulo is not None:
             cambios = [campo for campo in _CAMPOS_ACTUALIZABLES if getattr(articulo, campo) != fila[campo]]
             for campo in cambios:
@@ -485,6 +546,24 @@ def eliminar_articulo(id_articulo: int):
     if articulo is None:
         return jsonify(error="El artículo no existe."), 404
 
+    # Con historial no se borra: se da de baja para conservar su trazabilidad y su código.
+    if MovimientoInventario.query.filter_by(codigo_articulo=articulo.codigo).first() is not None:
+        datos = request.get_json(silent=True)
+        motivo = str(datos.get("motivo") or "").strip() if isinstance(datos, dict) else ""
+        if len(motivo) > 500:
+            return jsonify(error="El motivo no puede superar 500 caracteres."), 400
+        usuario = _usuario_actual()
+        articulo.dado_de_baja_en = _ahora_utc()
+        articulo.dado_de_baja_por = usuario.usuario
+        articulo.motivo_baja = motivo or None
+        _auditar(
+            usuario, "Dar de baja", articulo.codigo,
+            f"{articulo.nombre} · tenía {articulo.stock} {articulo.unidad}"
+            + (f" · Motivo: {motivo}" if motivo else ""),
+        )
+        db.session.commit()
+        return jsonify(mensaje="Artículo dado de baja. Su historial se conserva.", baja=True)
+
     imagen_url = articulo.imagen_url
     _auditar(
         _usuario_actual(), "Eliminar artículo", articulo.codigo,
@@ -493,7 +572,24 @@ def eliminar_articulo(id_articulo: int):
     db.session.delete(articulo)
     db.session.commit()
     eliminar_imagen_subida(imagen_url, "inventory")
-    return jsonify(mensaje="Artículo eliminado.")
+    return jsonify(mensaje="Artículo eliminado.", baja=False)
+
+
+@inventario_bp.post("/<int:id_articulo>/reactivar")
+def reactivar_articulo(id_articulo: int):
+    """Devuelve al inventario un artículo dado de baja, con el stock que tenía."""
+    error = _error_admin()
+    if error is not None:
+        return error
+    articulo = db.session.get(ArticuloInventario, id_articulo)
+    if articulo is None:
+        return jsonify(error="El artículo no existe."), 404
+    if articulo.dado_de_baja_en is None:
+        return jsonify(error="El artículo no está dado de baja."), 409
+    articulo.dado_de_baja_en = articulo.dado_de_baja_por = articulo.motivo_baja = None
+    _auditar(_usuario_actual(), "Reactivar artículo", articulo.codigo, articulo.nombre)
+    db.session.commit()
+    return jsonify(mensaje="Artículo reactivado.")
 
 
 @inventario_bp.patch("/<int:id_articulo>/servicio")
@@ -575,7 +671,7 @@ def listar_movimientos():
     movimientos = [m for m in movimientos if coincide(m)]
     encabezados = ["Fecha (hora Colombia)", "Tipo", "Código", "Artículo", "Categoría", "Cantidad", "Unidad",
                    "Operación Sizfra", "Formulario", "Origen", "Detalle", "Observaciones", "Empleado", "Usuario",
-                   "Documento soporte"]
+                   "Documento soporte", "Estado", "Motivo de anulación"]
 
     def detalle(m: MovimientoInventario) -> str:
         if m.salida:
@@ -585,14 +681,14 @@ def listar_movimientos():
 
     filas = [[hora_colombia(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad, m.unidad,
               m.operacion_sizfra, m.formulario, m.origen, detalle(m), m.observaciones, m.empleado, m.usuario,
-              m.documento_nombre]
+              m.documento_nombre, "Anulado" if m.anulado_en else "Vigente", m.motivo_anulacion]
              for m in movimientos]
     if formato == "xlsx":
         return respuesta_excel("Historial", encabezados, filas, "historial-movimientos")
     return respuesta_pdf(
         "Historial de movimientos",
         ["Fecha", "Tipo", "Código", "Artículo", "Cant.", "Sizfra", "Origen / detalle", "Observaciones", "Empleado"],
-        [[f[0], f[1], f[2], f[3], f"{f[5]} {f[6]}",
+        [[f[0], f"{f[1]} (ANULADO)" if f[15] == "Anulado" else f[1], f[2], f[3], f"{f[5]} {f[6]}",
           " · ".join(x for x in (f[7] and f"Op. {f[7]}", f[8] and f"Form. {f[8]}") if x),
           " · ".join(x for x in (f[9], f[10]) if x), f[11], f[12]] for f in filas],
         "historial-movimientos",
@@ -706,23 +802,8 @@ def ingresar_articulo(id_articulo: int):
         except ValueError as error:
             return jsonify(error=str(error)), 400
 
-    # Los ingresos no tienen tope (materia prima y consumibles rotan
-    # constantemente); stock_maximo solo guarda el stock más alto alcanzado.
-    resultado = db.session.execute(
-        update(ArticuloInventario)
-        .where(ArticuloInventario.id == id_articulo)
-        .values(
-            stock=ArticuloInventario.stock + cantidad,
-            stock_maximo=case(
-                (
-                    ArticuloInventario.stock + cantidad > ArticuloInventario.stock_maximo,
-                    ArticuloInventario.stock + cantidad,
-                ),
-                else_=ArticuloInventario.stock_maximo,
-            ),
-        )
-    )
-    if resultado.rowcount == 0:
+    # Los ingresos no tienen tope (materia prima y consumibles rotan constantemente).
+    if _sumar_stock(id_articulo, cantidad) == 0:
         db.session.rollback()
         return jsonify(error="El artículo no existe."), 404
 
@@ -818,7 +899,12 @@ def crear_salida_integrada():
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
-    articulos = {a.id: a for a in ArticuloInventario.query.filter(ArticuloInventario.id.in_(ids))}
+    articulos = {
+        a.id: a
+        for a in ArticuloInventario.query.filter(
+            ArticuloInventario.id.in_(ids), ArticuloInventario.dado_de_baja_en.is_(None)
+        )
+    }
     faltantes = [i for i in ids if i not in articulos]
     if faltantes:
         return jsonify(error="Alguno de los artículos ya no existe. Recarga la página."), 404
@@ -877,12 +963,83 @@ def crear_salida_integrada():
 @inventario_bp.get("/salidas-integradas/<int:id_salida>")
 def obtener_salida_integrada(id_salida: int):
     """Devuelve una salida integrada con el equipo y todas sus partes."""
-    if _usuario_actual() is None:
+    usuario = _usuario_actual()
+    if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
     salida = db.session.get(SalidaIntegrada, id_salida)
-    if salida is None:
+    # A quien no opera el inventario se le responde igual que si no existiera.
+    if salida is None or not (usuario.puede_operar or salida.usuario == usuario.usuario):
         return jsonify(error="La salida no existe."), 404
     return jsonify(salida=salida.to_dict())
+
+
+@inventario_bp.post("/movimientos/<int:id_movimiento>/anular")
+def anular_movimiento(id_movimiento: int):
+    """Corrige un error sin borrar: marca el registro como anulado y devuelve el stock.
+
+    Una salida integrada o una remisión se anulan completas, porque fueron una
+    sola operación. Si alguna línea no se puede revertir no cambia nada.
+    """
+    error = _error_admin()
+    if error is not None:
+        return error
+    datos = request.get_json(silent=True)
+    motivo = str(datos.get("motivo") or "").strip() if isinstance(datos, dict) else ""
+    if not motivo:
+        return jsonify(error="Indica el motivo de la anulación."), 400
+    if len(motivo) > 500:
+        return jsonify(error="El motivo no puede superar 500 caracteres."), 400
+
+    movimiento = db.session.get(MovimientoInventario, id_movimiento)
+    if movimiento is None:
+        return jsonify(error="El movimiento no existe."), 404
+    if movimiento.anulado_en is not None:
+        return jsonify(error="Este movimiento ya está anulado."), 409
+
+    registro = movimiento.salida or movimiento.remision
+    if movimiento.id_salida:
+        grupo = MovimientoInventario.query.filter_by(id_salida=movimiento.id_salida).all()
+        referencia = f"Salida integrada #{movimiento.id_salida}"
+    elif movimiento.id_remision:
+        grupo = MovimientoInventario.query.filter_by(id_remision=movimiento.id_remision).all()
+        referencia = f"Remisión {movimiento.remision.numero}"
+    else:
+        grupo = [movimiento]
+        referencia = "Movimiento individual"
+    lineas = [(m.id, m.codigo_articulo, m.tipo, m.cantidad, m.unidad) for m in grupo]
+
+    usuario = _usuario_actual()
+    marcas = {"anulado_en": _ahora_utc(), "anulado_por": usuario.usuario, "motivo_anulacion": motivo}
+    ids = [linea[0] for linea in lineas]
+    # La condición impide que dos anulaciones simultáneas devuelvan el stock dos veces.
+    marcados = db.session.execute(
+        update(MovimientoInventario)
+        .where(MovimientoInventario.id.in_(ids), MovimientoInventario.anulado_en.is_(None))
+        .values(**marcas)
+    ).rowcount
+    if marcados != len(ids):
+        db.session.rollback()
+        return jsonify(error="Este movimiento ya está anulado."), 409
+
+    for _id, codigo, tipo, cantidad, _unidad in lineas:
+        problema = _revertir_stock(codigo, tipo, cantidad)
+        if problema is not None:
+            db.session.rollback()
+            return jsonify(error=problema), 409
+
+    if registro is not None:
+        for campo, valor in marcas.items():
+            setattr(registro, campo, valor)
+    if isinstance(registro, Remision):
+        for linea in registro.lineas:
+            articulo = ArticuloInventario.query.filter_by(codigo=linea.codigo).first()
+            # Solo si nadie cambió el estado después de la remisión.
+            if articulo is not None and articulo.estado_servicio == linea.estado_servicio:
+                articulo.estado_servicio = linea.estado_servicio_anterior
+    for _id, codigo, tipo, cantidad, unidad in lineas:
+        _auditar(usuario, "Anular movimiento", codigo, f"{tipo} de {cantidad} {unidad} · {referencia} · Motivo: {motivo}")
+    db.session.commit()
+    return jsonify(mensaje="Anulación registrada.", anulados=len(ids))
 
 
 @inventario_bp.get("/trazabilidad/<codigo>")
@@ -928,5 +1085,7 @@ def trazabilidad_articulo(codigo: str):
             "cliente": articulo.cliente,
             "tipo_servicio": articulo.tipo_servicio,
             "estado_servicio": articulo.estado_servicio,
+            "dado_de_baja": articulo.dado_de_baja_en is not None,
+            "motivo_baja": articulo.motivo_baja,
         }
     return jsonify(codigo=codigo, articulo=datos_articulo, eventos=eventos)

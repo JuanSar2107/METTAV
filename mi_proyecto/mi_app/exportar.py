@@ -33,6 +33,10 @@ def respuesta_excel(titulo: str, encabezados: list[str], filas: list[list], nomb
         celda.fill = PatternFill("solid", fgColor=_AZUL)
     for fila in filas:
         hoja.append([_valor(valor) for valor in fila])
+        # Un texto que empieza con "=" se guardaría como fórmula ejecutable al abrir el Excel.
+        for celda in hoja[hoja.max_row]:
+            if celda.data_type == "f":
+                celda.data_type = "s"
     for indice, encabezado in enumerate(encabezados, start=1):
         largo = max([len(str(encabezado))] + [len(str(f[indice - 1] or "")) for f in filas[:500]])
         hoja.column_dimensions[hoja.cell(row=1, column=indice).column_letter].width = min(max(10, largo + 2), 60)

@@ -122,7 +122,11 @@ def _inventario_inicial():
             )
         db.session.add(ConfiguracionSistema(clave=clave, valor="1"))
         db.session.commit()
-    return ArticuloInventario.query.order_by(ArticuloInventario.id).all()
+    return (
+        ArticuloInventario.query.filter(ArticuloInventario.dado_de_baja_en.is_(None))
+        .order_by(ArticuloInventario.id)
+        .all()
+    )
 
 @main_bp.route('/')
 def login():
@@ -175,7 +179,9 @@ def manual_usuario():
 
 @main_bp.get('/docs')
 def docs():
-    """Describe en JSON todas las rutas activas de Flask."""
+    """Describe en JSON todas las rutas activas de Flask (solo con sesión iniciada)."""
+    if usuario_actual() is None:
+        return jsonify(error="Debes iniciar sesión."), 401
     rutas = []
     for regla in current_app.url_map.iter_rules():
         vista = current_app.view_functions[regla.endpoint]
