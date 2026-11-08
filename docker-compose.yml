@@ -55,6 +55,29 @@ services:
       retries: 3
       start_period: 10s
 
+  # Copia de seguridad automática cada 24 horas en el volumen mettav_data
+  # (carpeta respaldos; se conservan las RESPALDOS_CONSERVAR más recientes).
+  backup:
+    build:
+      context: ./mi_proyecto
+      dockerfile: Dockerfile
+    image: mettav:latest
+    container_name: mettav-backup
+    restart: unless-stopped
+    command: ["python", "respaldar.py", "--cada-horas", "24"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+      RESPALDOS_CONSERVAR: ${RESPALDOS_CONSERVAR:-14}
+    depends_on:
+      web:
+        condition: service_healthy
+    volumes:
+      - mettav_data:/app/instance
+      - mettav_profiles:/app/mi_app/static/images/profiles
+      - mettav_inventory:/app/mi_app/static/images/inventory
+    healthcheck:
+      disable: true
+
 volumes:
   mettav_data:
   mettav_profiles:
