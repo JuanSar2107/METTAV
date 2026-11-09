@@ -136,9 +136,10 @@ def test_no_deja_saltarse_el_consecutivo_a_mano(client, admin):
     assert _crear(client, codigo="SER-2026-09-29-BOM").status_code == 201
 
 
-def test_el_servidor_ignora_el_codigo_del_navegador_si_es_automatico(client, app, admin):
-    respuesta = _crear(client, sigla_categoria="HE", sigla_ubicacion="BOD", tipo="CO", codigo="ZF-HE-CO-900")
-    assert respuesta.status_code == 201
+def test_el_codigo_automatico_editado_tampoco_se_salta_el_consecutivo(client, app, admin):
+    datos = {"sigla_categoria": "HE", "sigla_ubicacion": "BOD", "tipo": "CO"}
+    assert _crear(client, **datos, codigo="ZF-HE-CO-900", codigo_sugerido="ZF-HE-CO-001").status_code == 400
+    assert _crear(client, **datos, codigo="ZF-HE-CO-001", codigo_sugerido="ZF-HE-CO-001").status_code == 201
     with app.app_context():
         assert ArticuloInventario.query.filter_by(codigo="ZF-HE-CO-001").count() == 1
 

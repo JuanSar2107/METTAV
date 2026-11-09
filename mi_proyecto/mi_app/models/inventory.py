@@ -236,6 +236,16 @@ class ArticuloInventario(db.Model):
     unidad = db.Column(db.String(24), nullable=False, default="unidades")
     ubicacion = db.Column(db.String(80), nullable=False)
     imagen_url = db.Column(db.String(500), nullable=False)
+    imagen_url_2 = db.Column(db.String(500))
+    imagen_url_3 = db.Column(db.String(500))
+
+    @property
+    def imagenes(self) -> list[str]:
+        """Las fotos propias del artículo; la imagen genérica de la bodega no cuenta."""
+        return [
+            url for url in (self.imagen_url, self.imagen_url_2, self.imagen_url_3)
+            if url and not url.endswith("/images/workshop-bg.jpg")
+        ]
 
 
 class MovimientoInventario(db.Model):

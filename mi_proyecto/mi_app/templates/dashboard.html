@@ -236,6 +236,7 @@
                     data-max-stock="{{ articulo.stock_maximo }}"
                     data-unit="{{ articulo.unidad }}"
                     data-image="{{ articulo.imagen_url }}"
+                    data-images='{{ articulo.imagenes|tojson }}'
                     data-withdraw-url="{{ url_for('inventario.retirar_articulo', id_articulo=articulo.id) }}"
                     data-entry-url="{{ url_for('inventario.ingresar_articulo', id_articulo=articulo.id) }}"
                     data-delete-url="{{ url_for('inventario.eliminar_articulo', id_articulo=articulo.id) }}"
@@ -615,7 +616,10 @@
         </svg>
     </button>
     <div class="dialog-layout">
-        <img class="dialog-image" id="dialog-image" alt="">
+        <div class="dialog-gallery">
+            <img class="dialog-image" id="dialog-image" alt="">
+            <div class="dialog-thumbs" id="dialog-thumbs" hidden></div>
+        </div>
         <div class="dialog-content">
             <p class="eyebrow" id="dialog-category"></p>
             <h2 id="dialog-title"></h2>
@@ -802,6 +806,10 @@
                     <input id="stock-entry-document" name="documento" type="file" accept="application/pdf,image/jpeg,image/png,image/webp">
                     <small>PDF o imagen; máximo 5 MB.</small>
                 </label>
+                <div class="admin-field--full image-preview-row">
+                    <img id="stock-entry-document-preview" alt="Vista previa del documento" hidden>
+                    <span id="stock-entry-document-name">Si eliges una imagen, aquí verás cuál es antes de guardar.</span>
+                </div>
                 <label class="admin-field" for="stock-entry-operation">
                     <span>Operación Sizfra</span>
                     <input id="stock-entry-operation" name="operacion_sizfra" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 101" autocomplete="off">
@@ -1046,31 +1054,32 @@
                     <input id="new-item-location" name="ubicacion" type="text" maxlength="80" placeholder="Ej. Estante A1">
                 </label>
                 <p class="admin-field--full admin-form-section">Código consecutivo</p>
+                <input id="new-item-code-suggested" name="codigo_sugerido" type="hidden">
+                <input id="new-item-internal-suggested" name="codigo_interno_sugerido" type="hidden">
                 <div class="admin-field--full code-builder" id="new-item-code-builder" data-next-url="{{ url_for('inventario.siguiente_codigo') }}">
                     <label class="admin-field" for="new-item-code-category">
                         <span>Categoría del código</span>
                         <select id="new-item-code-category" name="sigla_categoria">
                             <option value="">Sin código consecutivo</option>
-                            {% for sigla, nombre in categorias_sigla.items() %}<option value="{{ sigla }}">{{ sigla }} · {{ nombre }}</option>{% endfor %}
+                            {% for sigla, nombre in categorias_sigla.items() %}<option value="{{ sigla }}"{% if sigla == 'EQ' %} selected{% endif %}>{{ sigla }} · {{ nombre }}</option>{% endfor %}
                         </select>
                     </label>
                     <label class="admin-field" for="new-item-code-location">
                         <span>Ubicación del código</span>
                         <select id="new-item-code-location" name="sigla_ubicacion">
                             <option value="">Elegir</option>
-                            {% for sigla, nombre in ubicaciones_sigla.items() %}<option value="{{ sigla }}">{{ sigla }} · {{ nombre }}</option>{% endfor %}
+                            {% for sigla, nombre in ubicaciones_sigla.items() %}<option value="{{ sigla }}"{% if sigla == 'BOD' %} selected{% endif %}>{{ sigla }} · {{ nombre }}</option>{% endfor %}
                         </select>
                     </label>
                     <label class="admin-field" for="new-item-code-type">
                         <span>Tipo</span>
                         <select id="new-item-code-type" name="tipo">
                             <option value="">Elegir</option>
-                            {% for tipo in tipos_codigo %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                            {% for tipo in tipos_codigo %}<option value="{{ tipo }}"{% if tipo == 'CO' %} selected{% endif %}>{{ tipo }}</option>{% endfor %}
                         </select>
                     </label>
                 </div>
-                <p class="admin-field--full code-next" id="new-item-code-next" role="status" aria-live="polite">Elige categoría, ubicación y tipo para ver el código que sigue. La categoría y el grupo se toman de aquí.</p>
-                <p class="admin-field--full admin-form-section">Datos de zona franca (opcionales)</p>
+                <p class="admin-field--full code-next" id="new-item-code-next" role="status" aria-live="polite">El código se genera solo y sube de 1 en 1. Puedes cambiarlo; si lo borras, vuelve al automático. La categoría y el grupo se toman de aquí.</p>
                 <label class="admin-field" for="new-item-code">
                     <span>Código ZF</span>
                     <input id="new-item-code" name="codigo" type="text" maxlength="24" placeholder="Ej. ZF-MAQ-CO-001" autocomplete="off">
@@ -1079,6 +1088,7 @@
                     <span>Código interno</span>
                     <input id="new-item-internal-code" name="codigo_interno" type="text" maxlength="32" placeholder="Ej. MAQ-BOD-CO-001" autocomplete="off">
                 </label>
+                <p class="admin-field--full admin-form-section">Datos de zona franca (opcionales)</p>
                 <label class="admin-field" for="new-item-group">
                     <span>Grupo de inventario</span>
                     <select id="new-item-group" name="grupo">
@@ -1158,15 +1168,19 @@
                         {% for estado in estados_servicio %}<option value="{{ estado }}">{{ estado }}</option>{% endfor %}
                     </select>
                 </label>
-                <label class="admin-field admin-field--full" for="new-item-image">
-                    <span>Imagen del artículo (opcional)</span>
-                    <input id="new-item-image" name="imagen" type="file" accept="image/jpeg,image/png,image/webp">
-                    <small>JPEG, PNG o WEBP; máximo 5 MB. Sin imagen se usa la de la bodega.</small>
-                </label>
-            </div>
-            <div class="image-preview-row">
-                <img id="new-item-preview" alt="Vista previa de la imagen" hidden>
-                <span id="new-item-file-name">Selecciona una imagen para previsualizarla.</span>
+                <p class="admin-field--full admin-form-section">Imágenes del artículo (opcionales, hasta 3)</p>
+                <div class="admin-field--full image-slots">
+                    {% for n in [1, 2, 3] %}
+                    <div class="image-slot">
+                        <label class="admin-field"><span>Imagen {{ n }}{% if n == 1 %} (principal){% endif %}</span>
+                            <input id="new-item-image-{{ n }}" name="imagen{% if n > 1 %}_{{ n }}{% endif %}" type="file" accept="image/jpeg,image/png,image/webp">
+                        </label>
+                        <img id="new-item-preview-{{ n }}" alt="Vista previa de la imagen {{ n }}" hidden>
+                        <span class="image-slot-name" id="new-item-file-name-{{ n }}">Sin imagen.</span>
+                    </div>
+                    {% endfor %}
+                    <small class="image-slots-help">JPEG, PNG o WEBP; máximo 5 MB cada una. Sin imágenes se usa la de la bodega.</small>
+                </div>
             </div>
             <p class="dialog-message" id="create-item-message" role="status" aria-live="polite" hidden></p>
             <div class="admin-form-actions">
@@ -1205,10 +1219,20 @@
                 <label class="admin-field"><span>Ubicación</span>
                     <input name="ubicacion" type="text" maxlength="80">
                 </label>
-                <label class="admin-field admin-field--full"><span>Cambiar imagen</span>
-                    <input name="imagen" type="file" accept="image/jpeg,image/png,image/webp">
-                    <small>JPEG, PNG o WEBP; máximo 5 MB. Si no eliges una, se conserva la actual.</small>
-                </label>
+                <p class="admin-field--full admin-form-section">Imágenes del artículo (opcionales, hasta 3)</p>
+                <div class="admin-field--full image-slots">
+                    {% for n in [1, 2, 3] %}
+                    <div class="image-slot">
+                        <label class="admin-field"><span>Imagen {{ n }}{% if n == 1 %} (principal){% endif %}</span>
+                            <input id="edit-item-image-{{ n }}" name="imagen{% if n > 1 %}_{{ n }}{% endif %}" type="file" accept="image/jpeg,image/png,image/webp">
+                        </label>
+                        <img id="edit-item-preview-{{ n }}" alt="Vista previa de la imagen {{ n }}" hidden>
+                        <span class="image-slot-name" id="edit-item-file-name-{{ n }}">Sin imagen.</span>
+                        <label class="image-slot-remove" id="edit-item-remove-{{ n }}" hidden><input name="quitar_imagen_{{ n }}" type="checkbox" value="1"> Quitar esta imagen</label>
+                    </div>
+                    {% endfor %}
+                    <small class="image-slots-help">JPEG, PNG o WEBP; máximo 5 MB cada una. Si no eliges una, se conserva la actual.</small>
+                </div>
                 <p class="admin-field--full admin-form-section">Datos de zona franca</p>
                 <label class="admin-field"><span>Grupo de inventario</span>
                     <select name="grupo">

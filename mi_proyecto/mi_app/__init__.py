@@ -237,6 +237,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             "dado_de_baja_en": "TIMESTAMP",
             "dado_de_baja_por": "VARCHAR(80)",
             "motivo_baja": "TEXT",
+            "imagen_url_2": "VARCHAR(500)",
+            "imagen_url_3": "VARCHAR(500)",
         }
         missing_article_columns = {
             column_name: column_type
@@ -289,6 +291,6 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.errorhandler(413)
     def archivo_supera_limite(_error):
-        return jsonify(error="El archivo supera el límite de 5 MB."), 413
+        return jsonify(error="El envío es demasiado grande. Cada archivo puede pesar máximo 5 MB."), 413
 
     return app

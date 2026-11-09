@@ -212,15 +212,54 @@
         });
     });
 
+    // Muestra la imagen elegida antes de guardarla. Devuelve una función para fijar
+    // la imagen que se ve cuando no hay archivo elegido (la actual del artículo).
+    const setupFilePreview = (inputSelector, imageSelector, labelSelector) => {
+        const input = document.querySelector(inputSelector);
+        const image = document.querySelector(imageSelector);
+        const label = document.querySelector(labelSelector);
+        if (!(input instanceof HTMLInputElement) || !image || !label) return () => {};
+        let baseText = label.textContent;
+        let objectUrl = null;
+        let baseSrc = "";
+
+        const show = (src, text) => {
+            image.hidden = !src;
+            if (src) image.src = src;
+            label.textContent = text;
+        };
+        const render = () => {
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+            const file = input.files[0];
+            if (!file) {
+                show(baseSrc, baseText);
+            } else if (file.size > 5 * 1024 * 1024) {
+                input.value = "";
+                show(baseSrc, "El archivo supera el límite de 5 MB. Elige otro.");
+            } else if (file.type.startsWith("image/")) {
+                objectUrl = URL.createObjectURL(file);
+                show(objectUrl, `Vas a subir: ${file.name}`);
+            } else {
+                show("", `Vas a subir: ${file.name}`);
+            }
+        };
+        input.addEventListener("change", render);
+        // El evento llega antes de que el formulario se vacíe.
+        input.form?.addEventListener("reset", () => window.setTimeout(render));
+        return (src, text) => {
+            baseSrc = src || "";
+            if (text !== undefined) baseText = text;
+            render();
+        };
+    };
+    setupFilePreview("#stock-entry-document", "#stock-entry-document-preview", "#stock-entry-document-name");
+
     const addDialog = document.querySelector("#add-item-dialog");
     const addButton = document.querySelector("#open-add-item");
     const createForm = document.querySelector("#create-item-form");
-    const imageInput = document.querySelector("#new-item-image");
-    const imagePreview = document.querySelector("#new-item-preview");
-    const imageFileName = document.querySelector("#new-item-file-name");
     const createMessage = document.querySelector("#create-item-message");
     const createButton = document.querySelector("#create-item-button");
-    let previewUrl = null;
 
     if (
         addDialog instanceof HTMLDialogElement &&
@@ -235,27 +274,7 @@
             }
         });
 
-        imageInput.addEventListener("change", () => {
-            const image = imageInput.files[0];
-            if (previewUrl) {
-                URL.revokeObjectURL(previewUrl);
-                previewUrl = null;
-            }
-            imagePreview.hidden = !image;
-            if (!image) {
-                imageFileName.textContent = "Selecciona una imagen para previsualizarla.";
-                return;
-            }
-            if (image.size > 5 * 1024 * 1024) {
-                imageInput.value = "";
-                imagePreview.hidden = true;
-                imageFileName.textContent = "El archivo supera el límite de 5 MB.";
-                return;
-            }
-            previewUrl = URL.createObjectURL(image);
-            imagePreview.src = previewUrl;
-            imageFileName.textContent = image.name;
-        });
+        [1, 2, 3].forEach((n) => setupFilePreview(`#new-item-image-${n}`, `#new-item-preview-${n}`, `#new-item-file-name-${n}`));
 
         createForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -712,16 +731,37 @@
         const codeHelp = codeNext.textContent;
         const [categorySelect, locationSelect, typeSelect] = codeBuilder.querySelectorAll("select");
 
+        const codeSuggested = document.querySelector("#new-item-code-suggested");
+        const internalSuggested = document.querySelector("#new-item-internal-suggested");
+        let latestRequest = 0;
+
+        const isEdited = (input, suggested) => {
+            const value = input.value.trim().toUpperCase();
+            return Boolean(value) && value !== suggested.value;
+        };
+        // Pone el código generado, sin pisar lo que el usuario haya escrito.
+        const applyGenerated = (input, suggested, generated) => {
+            const edited = isEdited(input, suggested);
+            suggested.value = generated;
+            if (!edited) input.value = generated;
+        };
+        const describeCode = () => {
+            if (!codeSuggested.value) return;
+            codeNext.textContent = isEdited(codeInput, codeSuggested)
+                ? `Código cambiado a mano. Si lo borras, vuelve al automático: ${codeSuggested.value}.`
+                : `Este artículo quedará con el código ${codeSuggested.value}. Se genera solo y sube de 1 en 1; puedes cambiarlo.`;
+        };
+
         const updateNextCode = async () => {
-            const automatic = Boolean(categorySelect.value || locationSelect.value);
-            codeInput.readOnly = automatic;
-            internalInput.readOnly = automatic;
-            if (automatic) {
-                codeInput.value = "";
-                internalInput.value = "";
-            }
-            if (!categorySelect.value || !locationSelect.value || !typeSelect.value) {
-                codeNext.textContent = codeHelp;
+            const request = ++latestRequest;
+            // "Sin código consecutivo" deja escribir el código a mano (p. ej. SER-...).
+            const automatic = Boolean(categorySelect.value);
+            locationSelect.disabled = !automatic;
+            typeSelect.disabled = !automatic;
+            if (!automatic || !locationSelect.value || !typeSelect.value) {
+                applyGenerated(codeInput, codeSuggested, "");
+                applyGenerated(internalInput, internalSuggested, "");
+                codeNext.textContent = automatic ? codeHelp : "Sin consecutivo: escribe el código a mano más abajo.";
                 return;
             }
             const params = new URLSearchParams({
@@ -732,15 +772,28 @@
             try {
                 const response = await fetch(`${codeBuilder.dataset.nextUrl}?${params}`);
                 const result = await response.json();
+                if (request !== latestRequest) return;
                 if (!response.ok) throw new Error(result.error);
-                codeInput.value = result.codigo;
-                internalInput.value = result.codigo_interno;
-                codeNext.textContent = `Código que sigue: ${result.codigo} (interno ${result.codigo_interno}).`;
+                applyGenerated(codeInput, codeSuggested, result.codigo);
+                applyGenerated(internalInput, internalSuggested, result.codigo_interno);
+                describeCode();
             } catch (error) {
+                if (request !== latestRequest) return;
                 codeNext.textContent = error.message || "No se pudo calcular el código siguiente.";
             }
         };
         [categorySelect, locationSelect, typeSelect].forEach((select) => select.addEventListener("change", updateNextCode));
+        document.querySelector("#open-add-item")?.addEventListener("click", updateNextCode);
+        [[codeInput, codeSuggested], [internalInput, internalSuggested]].forEach(([input, suggested]) => {
+            input.addEventListener("input", describeCode);
+            // Al salir del campo vacío vuelve el automático (no mientras se está escribiendo).
+            input.addEventListener("blur", () => {
+                if (!input.value.trim() && suggested.value) {
+                    input.value = suggested.value;
+                    describeCode();
+                }
+            });
+        });
     }
 
     const addUserDialog = document.querySelector("#add-user-dialog");
@@ -940,6 +993,7 @@
     }
 
     const detailImage = document.querySelector("#dialog-image");
+    const detailThumbs = document.querySelector("#dialog-thumbs");
     const detailName = document.querySelector("#dialog-title");
     const detailCategory = document.querySelector("#dialog-category");
     const detailDescription = document.querySelector("#dialog-description");
@@ -971,6 +1025,22 @@
         detailImage.src = card.dataset.image;
         detailImage.dataset.fallback = card.querySelector(".item-image").dataset.fallback;
         detailImage.alt = card.dataset.name;
+        const photos = JSON.parse(card.dataset.images || "[]");
+        detailThumbs.replaceChildren(...photos.map((src, index) => {
+            const thumb = document.createElement("button");
+            const picture = document.createElement("img");
+            thumb.type = "button";
+            thumb.className = "dialog-thumb";
+            thumb.setAttribute("aria-label", `Ver imagen ${index + 1} de ${photos.length}`);
+            picture.src = src;
+            picture.alt = "";
+            thumb.append(picture);
+            thumb.addEventListener("click", () => {
+                detailImage.src = src;
+            });
+            return thumb;
+        }));
+        detailThumbs.hidden = photos.length < 2;
         detailName.textContent = card.dataset.name;
         detailCategory.textContent = card.dataset.category;
         detailDescription.textContent = card.dataset.description;
@@ -1022,6 +1092,18 @@
     if (editDialog instanceof HTMLDialogElement && editForm instanceof HTMLFormElement) {
         const editMessage = document.querySelector("#edit-item-message");
         const editButton = document.querySelector("#edit-item-button");
+        const editImageSlots = [1, 2, 3].map((n) => {
+            const slot = {
+                src: "",
+                set: setupFilePreview(`#edit-item-image-${n}`, `#edit-item-preview-${n}`, `#edit-item-file-name-${n}`),
+                remove: document.querySelector(`#edit-item-remove-${n}`),
+            };
+            slot.remove.querySelector("input").addEventListener("change", (event) => {
+                if (event.target.checked) slot.set("", "Se quitará al guardar.");
+                else slot.set(slot.src, "Imagen actual.");
+            });
+            return slot;
+        });
         const editFields = {
             nombre: "name", categoria: "category", descripcion: "description", unidad: "unit", ubicacion: "location",
             grupo: "group", marca: "brand", subpartida: "tariff", valor_fob_usd: "fob", procedencia: "origin",
@@ -1033,6 +1115,12 @@
         document.querySelector("#open-edit-item").addEventListener("click", () => {
             if (!selectedCard) return;
             editForm.reset();
+            const currentImages = JSON.parse(selectedCard.dataset.images || "[]");
+            editImageSlots.forEach((slot, index) => {
+                slot.src = currentImages[index] || "";
+                slot.set(slot.src, slot.src ? "Imagen actual." : "Sin imagen.");
+                slot.remove.hidden = !slot.src;
+            });
             const categorySelect = editForm.elements.categoria;
             if (![...categorySelect.options].some((option) => option.value === selectedCard.dataset.category)) {
                 categorySelect.add(new Option(selectedCard.dataset.category, selectedCard.dataset.category));

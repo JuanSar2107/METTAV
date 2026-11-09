@@ -50,6 +50,11 @@ inventario_bp = Blueprint("inventario", __name__, url_prefix="/api/inventario")
 _RE_OPERACION = re.compile(r"^\d{1,6}$")
 _RE_FORMULARIO = re.compile(r"^[A-Za-z0-9-]{1,24}$")
 
+_CAMPOS_IMAGEN = ("imagen", "imagen_2", "imagen_3")
+_MAX_BYTES_IMAGEN = 5 * 1024 * 1024
+# Tres imágenes de 5 MB más los demás campos del formulario.
+_MAX_ENVIO_ARTICULO = 16 * 1024 * 1024
+
 
 def datos_sizfra(datos) -> dict:
     """Valida la operación y el formulario de Sizfra (ambos opcionales)."""
@@ -140,6 +145,33 @@ def _error_admin():
     return None
 
 
+def _archivos_imagen() -> dict[str, object]:
+    """Las imágenes que llegaron en el formulario, por nombre de campo."""
+    return {
+        campo: request.files[campo]
+        for campo in _CAMPOS_IMAGEN
+        if campo in request.files and request.files[campo].filename
+    }
+
+
+def _guardar_imagen_articulo(archivo):
+    archivo.stream.seek(0, 2)
+    tamano = archivo.stream.tell()
+    archivo.stream.seek(0)
+    if tamano > _MAX_BYTES_IMAGEN:
+        raise ValueError("Cada imagen puede pesar máximo 5 MB.")
+    return guardar_imagen(archivo, "inventory")
+
+
+def _columnas_imagen(urls: list[str]) -> dict[str, str | None]:
+    """Reparte hasta 3 URL en sus columnas; sin fotos se usa la imagen de la bodega."""
+    return {
+        "imagen_url": urls[0] if urls else url_for("static", filename="images/workshop-bg.jpg"),
+        "imagen_url_2": urls[1] if len(urls) > 1 else None,
+        "imagen_url_3": urls[2] if len(urls) > 2 else None,
+    }
+
+
 def _ahora_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -211,6 +243,7 @@ def siguiente_codigo():
 
 @inventario_bp.post("/")
 def crear_articulo():
+    request.max_content_length = _MAX_ENVIO_ARTICULO
     error = _error_admin()
     if error is not None:
         return error
@@ -235,9 +268,9 @@ def crear_articulo():
     if stock < 0:
         return jsonify(error="El stock no puede ser negativo."), 400
 
-    # Con categoría, ubicación y tipo el código sale consecutivo: se calcula aquí, no se
-    # confía en el del navegador. Sin ellos se admite uno escrito a mano (p. ej. SER-...)
-    # y, si no se indica ninguno, se genera uno interno.
+    # Con categoría, ubicación y tipo el código sale consecutivo y se calcula aquí, salvo
+    # que el usuario lo haya cambiado. Sin ellos se admite uno escrito a mano (p. ej.
+    # SER-...) y, si no se indica ninguno, se genera uno interno.
     sigla_categoria = request.form.get("sigla_categoria", "").strip().upper()
     sigla_ubicacion = request.form.get("sigla_ubicacion", "").strip().upper()
     tipo_codigo = request.form.get("tipo", "").strip().upper()
@@ -247,7 +280,17 @@ def crear_articulo():
         campos_zf.update(campos_trazabilidad(request.form))
         campos_zf.update(campos_servicio(request.form))
         if codigo_automatico:
-            codigo, campos_zf["codigo_interno"] = codigos_siguientes(sigla_categoria, sigla_ubicacion, tipo_codigo)
+            codigo, interno_generado = codigos_siguientes(sigla_categoria, sigla_ubicacion, tipo_codigo)
+            # Igual al sugerido o vacío = automático: se usa el número recién calculado.
+            escrito = normalizar_codigo(request.form.get("codigo", ""))
+            if escrito and escrito != normalizar_codigo(request.form.get("codigo_sugerido", "")):
+                if not codigo_valido(escrito):
+                    raise ValueError("El código ZF solo admite letras, números y guiones (máximo 24).")
+                validar_sin_salto(escrito)
+                codigo = escrito
+            interno_sugerido = normalizar_codigo(request.form.get("codigo_interno_sugerido", ""))
+            if campos_zf["codigo_interno"] in (None, "", interno_sugerido):
+                campos_zf["codigo_interno"] = interno_generado
         else:
             codigo = normalizar_codigo(request.form.get("codigo", ""))
             if codigo and not codigo_valido(codigo):
@@ -264,16 +307,17 @@ def crear_articulo():
             ubicacion = UBICACIONES_SIGLA[sigla_ubicacion]
         campos_zf["grupo"] = campos_zf["grupo"] or grupo_por_ubicacion(sigla_ubicacion)
 
-    # La imagen es opcional: sin ella se usa la misma imagen por defecto que en la importación.
-    imagen = request.files.get("imagen")
-    ruta_imagen = None
-    if imagen is not None and imagen.filename:
-        try:
-            imagen_url, ruta_imagen = guardar_imagen(imagen, "inventory")
-        except ValueError as error:
-            return jsonify(error=str(error)), 400
-    else:
-        imagen_url = url_for("static", filename="images/workshop-bg.jpg")
+    # Hasta 3 imágenes, todas opcionales: sin ninguna se usa la imagen por defecto.
+    urls_imagen, rutas_imagen = [], []
+    try:
+        for archivo in _archivos_imagen().values():
+            url_imagen, ruta_imagen = _guardar_imagen_articulo(archivo)
+            urls_imagen.append(url_imagen)
+            rutas_imagen.append(ruta_imagen)
+    except ValueError as error:
+        for ruta_imagen in rutas_imagen:
+            ruta_imagen.unlink(missing_ok=True)
+        return jsonify(error=str(error)), 400
 
     articulo = ArticuloInventario(
         codigo=codigo or f"ADM-{uuid4().hex[:10].upper()}",
@@ -284,7 +328,7 @@ def crear_articulo():
         stock_maximo=stock,
         unidad=unidad,
         ubicacion=ubicacion,
-        imagen_url=imagen_url,
+        **_columnas_imagen(urls_imagen),
         **campos_zf,
     )
     db.session.add(articulo)
@@ -308,7 +352,7 @@ def crear_articulo():
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        if ruta_imagen is not None:
+        for ruta_imagen in rutas_imagen:
             ruta_imagen.unlink(missing_ok=True)
         return jsonify(error="No se pudo guardar el artículo. Inténtalo de nuevo."), 409
 
@@ -323,6 +367,7 @@ def actualizar_articulo(id_articulo: int):
     el stock cambia solo con ingresos, retiros, salidas y remisiones. El cliente y
     el servicio tienen su propio formulario.
     """
+    request.max_content_length = _MAX_ENVIO_ARTICULO
     error = _error_admin()
     if error is not None:
         return error
@@ -354,15 +399,30 @@ def actualizar_articulo(id_articulo: int):
 
     cambios = [campo for campo, valor in nuevos.items() if getattr(articulo, campo) != valor]
 
-    imagen = request.files.get("imagen")
-    imagen_anterior = None
-    if imagen is not None and imagen.filename:
-        try:
-            imagen_url, _ruta = guardar_imagen(imagen, "inventory")
-        except ValueError as error:
-            return jsonify(error=str(error)), 400
-        imagen_anterior = articulo.imagen_url
-        articulo.imagen_url = imagen_url
+    # Cada casilla conserva, reemplaza o quita su imagen; las que queden se reacomodan.
+    actuales = articulo.imagenes
+    archivos = _archivos_imagen()
+    finales, rutas_nuevas, imagenes_anteriores = [], [], []
+    try:
+        for posicion, campo in enumerate(_CAMPOS_IMAGEN):
+            actual = actuales[posicion] if posicion < len(actuales) else None
+            if campo in archivos:
+                url_imagen, ruta_imagen = _guardar_imagen_articulo(archivos[campo])
+                finales.append(url_imagen)
+                rutas_nuevas.append(ruta_imagen)
+                if actual:
+                    imagenes_anteriores.append(actual)
+            elif actual and request.form.get(f"quitar_imagen_{posicion + 1}"):
+                imagenes_anteriores.append(actual)
+            elif actual:
+                finales.append(actual)
+    except ValueError as error:
+        for ruta_imagen in rutas_nuevas:
+            ruta_imagen.unlink(missing_ok=True)
+        return jsonify(error=str(error)), 400
+    if rutas_nuevas or imagenes_anteriores:
+        for columna, valor in _columnas_imagen(finales).items():
+            setattr(articulo, columna, valor)
         cambios.append("imagen")
 
     if cambios:
@@ -375,7 +435,7 @@ def actualizar_articulo(id_articulo: int):
             "Campos: " + ", ".join(campo.replace("_", " ") for campo in cambios),
         )
         db.session.commit()
-    if imagen_anterior:
+    for imagen_anterior in imagenes_anteriores:
         eliminar_imagen_subida(imagen_anterior, "inventory")
     return jsonify(articulo={"id": articulo.id, "nombre": articulo.nombre}, cambios=len(cambios))
 
@@ -564,14 +624,15 @@ def eliminar_articulo(id_articulo: int):
         db.session.commit()
         return jsonify(mensaje="Artículo dado de baja. Su historial se conserva.", baja=True)
 
-    imagen_url = articulo.imagen_url
+    imagenes = articulo.imagenes
     _auditar(
         _usuario_actual(), "Eliminar artículo", articulo.codigo,
         f"{articulo.nombre} · tenía {articulo.stock} {articulo.unidad} en stock",
     )
     db.session.delete(articulo)
     db.session.commit()
-    eliminar_imagen_subida(imagen_url, "inventory")
+    for imagen in imagenes:
+        eliminar_imagen_subida(imagen, "inventory")
     return jsonify(mensaje="Artículo eliminado.", baja=False)
 
 
