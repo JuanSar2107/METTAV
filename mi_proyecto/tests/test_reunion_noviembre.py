@@ -42,7 +42,7 @@ def _crear(client, **datos):
 # --- Perfil auxiliar de inventarios -------------------------------------------
 
 def test_admin_crea_usuario_auxiliar(client, app, admin):
-    respuesta = client.post("/api/usuarios", json={"usuario": "laura", "contrasena": "clave-123", "rol": "auxiliar"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "laura", "contrasena": "clave-segura-123", "rol": "auxiliar"})
     assert respuesta.status_code == 201
     assert respuesta.get_json()["usuario"]["rol"] == "auxiliar"
     with app.app_context():
@@ -51,12 +51,12 @@ def test_admin_crea_usuario_auxiliar(client, app, admin):
 
 
 def test_no_se_puede_crear_un_admin_por_la_api(client, admin):
-    respuesta = client.post("/api/usuarios", json={"usuario": "x", "contrasena": "clave-123", "rol": "admin"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "x", "contrasena": "clave-segura-123", "rol": "admin"})
     assert respuesta.status_code == 400
 
 
 def test_usuario_sin_rol_sigue_siendo_empleado(client, admin):
-    respuesta = client.post("/api/usuarios", json={"usuario": "ana", "contrasena": "clave-123"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "ana", "contrasena": "clave-segura-123"})
     assert respuesta.get_json()["usuario"]["rol"] == "empleado"
 
 
@@ -69,7 +69,7 @@ def test_auxiliar_no_crea_codigos_ni_usuarios(client, auxiliar, kit):
     assert client.delete(f"/api/inventario/{kit}").status_code == 403
     assert client.post("/api/inventario/categorias", json={"nombre": "Nueva"}).status_code == 403
     assert client.get("/api/usuarios").status_code == 403
-    assert client.post("/api/usuarios", json={"usuario": "x", "contrasena": "clave-123"}).status_code == 403
+    assert client.post("/api/usuarios", json={"usuario": "x", "contrasena": "clave-segura-123"}).status_code == 403
 
 
 def test_auxiliar_opera_y_consulta(client, auxiliar, kit):

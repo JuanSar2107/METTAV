@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, send_file, session, url_for
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, send_file, url_for
 
 from mi_app.extensions import db
-from mi_app.security import usuario_actual
+from mi_app.security import cerrar_sesion_actual, usuario_actual
 from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
 from mi_app.models.inventory import ESTADOS_SERVICIO, GRUPOS_INVENTARIO, PROCESOS_INTEGRACION, TIPOS_SERVICIO
 from mi_app.zona_franca import CATEGORIAS_SIGLA, TIPOS_CODIGO, UBICACIONES_SIGLA
@@ -17,7 +17,11 @@ _DESCRIPCIONES_RUTAS = {
     "usuarios.registrar_usuario": "Crea una cuenta de usuario normal; requiere sesión de administrador.",
     "usuarios.listar_usuarios": "Devuelve la lista de usuarios y empleados registrados; con ?formato=xlsx o pdf la descarga con los filtros q y rol; requiere sesión de administrador.",
     "usuarios.iniciar_sesion": "Valida las credenciales y crea la sesión del usuario.",
-    "usuarios.cerrar_sesion": "Cierra la sesión actual.",
+    "usuarios.cerrar_sesion": "Cierra la sesión actual y revoca sus tokens.",
+    "usuarios.iniciar_2fa": "Genera el secreto TOTP para configurar la verificación en dos pasos; pide la contraseña.",
+    "usuarios.activar_2fa": "Activa la verificación en dos pasos con un código de la app autenticadora.",
+    "usuarios.desactivar_2fa": "Desactiva la verificación en dos pasos; pide contraseña y código.",
+    "usuarios.listar_accesos": "Bitácora de accesos (inicios de sesión, fallos, bloqueos); requiere sesión de administrador.",
     "usuarios.obtener_usuario_actual": "Devuelve los datos del usuario autenticado.",
     "usuarios.actualizar_perfil": "Actualiza el perfil y la imagen del usuario autenticado.",
     "usuarios.actualizar_usuario_actual": "Actualiza el nombre de usuario o la contraseña propios.",
@@ -139,7 +143,7 @@ def login():
 def dashboard():
     usuario = usuario_actual()
     if usuario is None:
-        session.clear()
+        cerrar_sesion_actual()
         return redirect(url_for('main.login'))
     articulos = _inventario_inicial()
     categorias = Categoria.query.order_by(Categoria.nombre.asc()).all()

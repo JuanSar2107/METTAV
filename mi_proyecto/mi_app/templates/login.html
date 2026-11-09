@@ -69,6 +69,16 @@
                 </div>
             </div>
 
+            <div class="field-group" id="otp-group" hidden>
+                <label class="field-label" for="otp">
+                    <img class="label-icon" src="{{ url_for('static', filename='images/lock.svg') }}" alt="" aria-hidden="true">
+                    <span>Código de verificación</span>
+                </label>
+                <div class="input-wrap">
+                    <input id="otp" name="codigo" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code" placeholder="123456">
+                </div>
+            </div>
+
             <div class="form-options">
                 <label class="remember-label">
                     <input type="checkbox" name="remember">
@@ -82,6 +92,7 @@
 
     </section>
 </main>
+<script src="{{ url_for('static', filename='js/csrf.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/i18n.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/login.js') }}" defer></script>
 </body>

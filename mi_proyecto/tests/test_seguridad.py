@@ -1,7 +1,14 @@
 """Tests de las medidas de seguridad (mi_app/security.py y rutas protegidas)."""
 
+import hashlib
+import time
+
+import jwt
 import pytest
-from flask.sessions import SecureCookieSessionInterface
+
+from mi_app import security, totp
+from mi_app.extensions import db
+from mi_app.models import EventoLimite, RegistroAcceso, SesionToken
 
 
 def test_cabeceras_de_seguridad(client):
@@ -15,12 +22,16 @@ def test_api_no_se_guarda_en_cache(client):
     assert client.get("/api/usuarios/me").headers["Cache-Control"] == "no-store"
 
 
-def test_cookie_de_sesion_httponly_y_lax(creador_usuarios, iniciar_sesion):
+def test_cookies_jwt_httponly_y_lax(creador_usuarios, iniciar_sesion):
     creador_usuarios("ana")
-    cookie = iniciar_sesion("ana").headers["Set-Cookie"]
-    assert "HttpOnly" in cookie
-    assert "SameSite=Lax" in cookie
-    assert "Secure" not in cookie  # en HTTP local no se marca Secure
+    cookies = {c.split("=")[0]: c for c in iniciar_sesion("ana").headers.getlist("Set-Cookie")}
+    assert set(cookies) == {"mettav_access", "mettav_refresh", "mettav_csrf"}
+    for nombre in ("mettav_access", "mettav_refresh"):
+        assert "HttpOnly" in cookies[nombre]  # el JavaScript no puede leer los JWT
+    assert "HttpOnly" not in cookies["mettav_csrf"]  # este lo lee csrf.js
+    for cookie in cookies.values():
+        assert "SameSite=Lax" in cookie
+        assert "Secure" not in cookie  # en HTTP local no se marca Secure
 
 
 def test_cookie_secure_en_https(client, creador_usuarios):
@@ -30,8 +41,8 @@ def test_cookie_secure_en_https(client, creador_usuarios):
         json={"usuario": "ana", "contrasena": "clave123"},
         base_url="https://localhost",
     )
-    assert "Secure" in respuesta.headers["Set-Cookie"]
-    assert "Strict-Transport-Security" in respuesta.headers
+    assert all("Secure" in c for c in respuesta.headers.getlist("Set-Cookie"))
+    assert "includeSubDomains" in respuesta.headers["Strict-Transport-Security"]
 
 
 @pytest.mark.parametrize(
@@ -72,13 +83,20 @@ def test_login_bloquea_tras_varios_fallos(client, creador_usuarios):
 def test_cambio_de_contrasena_requiere_la_actual(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("ana")
     iniciar_sesion("ana")
-    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva1234"})
+    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva-segura-123"})
     assert respuesta.status_code == 403
-    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva1234", "contrasena_actual": "incorrecta"})
+    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva-segura-123", "contrasena_actual": "incorrecta"})
     assert respuesta.status_code == 403
 
 
-@pytest.mark.parametrize("contrasena", ["corta1", "solamenteletras", "1234567890"])
+@pytest.mark.parametrize(
+    "contrasena",
+    [
+        "corta1", "solamenteletras", "1234567890", "clave123",  # cortas o sin mezcla
+        "Password1234", "aaaaaaaaaaaa1",  # común / repetitiva
+        "nuevo-clave-2026",  # contiene el nombre de usuario
+    ],
+)
 def test_contrasena_debil_rechazada(client, creador_usuarios, iniciar_sesion, contrasena):
     creador_usuarios("jefe", es_admin=True)
     iniciar_sesion("jefe")
@@ -94,7 +112,7 @@ def test_cambio_de_contrasena_cierra_otras_sesiones(app, creador_usuarios):
         cliente.post("/api/login", json={"usuario": "ana", "contrasena": "clave123"})
 
     respuesta = sesion_nueva.put(
-        "/api/usuarios/me", json={"contrasena": "nueva1234", "contrasena_actual": "clave123"}
+        "/api/usuarios/me", json={"contrasena": "nueva-segura-123", "contrasena_actual": "clave123"}
     )
     assert respuesta.status_code == 200
     assert sesion_nueva.get("/api/usuarios/me").status_code == 200
@@ -116,16 +134,43 @@ def test_no_se_puede_eliminar_el_unico_admin(client, creador_usuarios, iniciar_s
     assert respuesta.status_code == 409
 
 
-def test_sesion_falsificada_con_clave_vieja_no_sirve(app, client, creador_usuarios):
-    """Una cookie firmada con la antigua clave por defecto ya no da acceso."""
-    id_admin = creador_usuarios("jefe", es_admin=True)
-    original = app.secret_key
-    app.secret_key = "mettav-dev-key-2026"
-    cookie = SecureCookieSessionInterface().get_signing_serializer(app).dumps({"id_usuario": id_admin})
-    app.secret_key = original
+def _jwt_falso(id_usuario, clave, algoritmo="HS256", tipo="access"):
+    ahora = int(time.time())
+    carga = {"iss": "mettav", "sub": str(id_usuario), "sid": "falsa", "jti": "x", "typ": tipo,
+             "pwd": "x", "iat": ahora, "exp": ahora + 900}
+    return jwt.encode(carga, clave, algorithm=algoritmo)
 
-    client.set_cookie("session", cookie)
+
+def test_jwt_firmado_con_clave_vieja_no_sirve(client, creador_usuarios):
+    """Un JWT firmado con la antigua clave por defecto ya no da acceso."""
+    id_admin = creador_usuarios("jefe", es_admin=True)
+    vieja = hashlib.sha256(b"mettav-jwt-v1|mettav-dev-key-2026").digest()
+    client.set_cookie("mettav_access", _jwt_falso(id_admin, vieja))
     assert client.get("/api/usuarios/me").status_code == 401
+
+
+def test_jwt_sin_firma_no_sirve(client, creador_usuarios):
+    id_admin = creador_usuarios("jefe", es_admin=True)
+    client.set_cookie("mettav_access", _jwt_falso(id_admin, None, algoritmo="none"))
+    assert client.get("/api/usuarios/me").status_code == 401
+
+
+def test_jwt_firmado_bien_pero_sin_sesion_en_servidor_no_sirve(app, client, creador_usuarios):
+    """Aunque la firma sea correcta, sin una sesión registrada en la BD no se entra."""
+    id_admin = creador_usuarios("jefe", es_admin=True)
+    with app.app_context():
+        token = _jwt_falso(id_admin, security._clave_jwt())
+    client.set_cookie("mettav_access", token)
+    assert client.get("/api/usuarios/me").status_code == 401
+
+
+def test_el_refresco_no_sirve_como_acceso(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    refresco = client.get_cookie("mettav_refresh").value
+    otro = client.application.test_client()
+    otro.set_cookie("mettav_access", refresco)
+    assert otro.get("/api/usuarios/me").status_code == 401
 
 
 @pytest.mark.parametrize("valor", [None, "", "cambia-esta-clave-en-produccion", "mettav-dev-key-2026"])
@@ -160,3 +205,224 @@ def test_asistente_limita_consultas(client, monkeypatch, creador_usuarios, inici
     codigos = [client.post("/api/asistente/", json={"pregunta": "hola"}).status_code for _ in range(16)]
     assert codigos[:15] == [200] * 15
     assert codigos[15] == 429
+
+
+# --------------------------------------------------------- ciclo de vida de los JWT
+
+def _caducar_acceso(app, cliente):
+    """Deja vencido el JWT de acceso del cliente (como si pasaran los 15 minutos)."""
+    token = cliente.get_cookie("mettav_access").value
+    with app.app_context():
+        clave = security._clave_jwt()
+        carga = jwt.decode(token, clave, algorithms=["HS256"], issuer="mettav", options={"verify_exp": False})
+        carga["exp"] = int(time.time()) - 600
+        carga["iat"] = carga["exp"] - 900
+        cliente.set_cookie("mettav_access", jwt.encode(carga, clave, algorithm="HS256"))
+
+
+def _sid(cliente):
+    return jwt.decode(cliente.get_cookie("mettav_refresh").value, options={"verify_signature": False})["sid"]
+
+
+def _fila(app, cliente):
+    sid = _sid(cliente)
+    with app.app_context():
+        return SesionToken.query.filter_by(familia=sid).first()
+
+
+def _modificar_fila(app, cliente, **campos):
+    sid = _sid(cliente)
+    with app.app_context():
+        SesionToken.query.filter_by(familia=sid).update(campos)
+        db.session.commit()
+
+
+def test_logout_revoca_los_tokens_en_el_servidor(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    robados = {n: client.get_cookie(n).value for n in ("mettav_access", "mettav_refresh")}
+    assert client.post("/api/logout").status_code == 200
+    assert client.get("/api/usuarios/me").status_code == 401
+
+    # Quien copió las cookies antes del logout tampoco entra, aunque no hayan vencido.
+    ladron = app.test_client()
+    for nombre, valor in robados.items():
+        ladron.set_cookie(nombre, valor)
+    assert ladron.get("/api/usuarios/me").status_code == 401
+
+
+def test_acceso_vencido_se_renueva_con_el_refresco_rotandolo(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    refresco_inicial = client.get_cookie("mettav_refresh").value
+    _caducar_acceso(app, client)
+
+    assert client.get("/api/usuarios/me").status_code == 200
+    assert client.get_cookie("mettav_refresh").value != refresco_inicial
+    assert client.get("/api/usuarios/me").status_code == 200
+
+
+def test_refresco_robado_y_reutilizado_cierra_toda_la_sesion(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    copiado = client.get_cookie("mettav_refresh").value
+    _caducar_acceso(app, client)
+    assert client.get("/api/usuarios/me").status_code == 200  # el usuario rota su refresco
+    _modificar_fila(app, client, rotada_en=int(time.time()) - 600)  # pasó la ventana de tolerancia
+
+    ladron = app.test_client()
+    ladron.set_cookie("mettav_refresh", copiado)
+    assert ladron.get("/api/usuarios/me").status_code == 401
+
+    # La sesión legítima también queda revocada.
+    _caducar_acceso(app, client)
+    assert client.get("/api/usuarios/me").status_code == 401
+    with app.app_context():
+        assert RegistroAcceso.query.filter_by(evento="token_reutilizado").count() == 1
+
+
+def test_dos_peticiones_a_la_vez_con_el_mismo_refresco_no_cierran_la_sesion(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    refresco = client.get_cookie("mettav_refresh").value
+    _caducar_acceso(app, client)
+    assert client.get("/api/usuarios/me").status_code == 200
+
+    paralela = app.test_client()
+    paralela.set_cookie("mettav_refresh", refresco)  # el navegador envió el viejo a la vez
+    assert paralela.get("/api/usuarios/me").status_code == 200
+    assert client.get("/api/usuarios/me").status_code == 200
+
+
+def test_sesion_se_cierra_por_inactividad(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    _caducar_acceso(app, client)
+    _modificar_fila(app, client, expira=int(time.time()) - 1)
+    assert client.get("/api/usuarios/me").status_code == 401
+
+
+def test_sesion_se_cierra_al_pasar_la_duracion_maxima(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    _modificar_fila(app, client, inicio=int(time.time()) - 13 * 3600)
+    assert client.get("/api/usuarios/me").status_code == 401
+
+
+def test_cambio_de_contrasena_revoca_las_demas_sesiones_en_la_bd(app, creador_usuarios):
+    creador_usuarios("ana")
+    a, b = app.test_client(), app.test_client()
+    for cliente in (a, b):
+        cliente.post("/api/login", json={"usuario": "ana", "contrasena": "clave123"})
+    b.put("/api/usuarios/me", json={"contrasena": "nueva-segura-123", "contrasena_actual": "clave123"})
+    assert _fila(app, a).revocada is True
+    assert _fila(app, b).revocada is False
+
+
+def test_contrasena_nueva_debe_ser_distinta(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana", contrasena="clave-segura-123")
+    iniciar_sesion("ana", "clave-segura-123")
+    respuesta = client.put(
+        "/api/usuarios/me", json={"contrasena": "clave-segura-123", "contrasena_actual": "clave-segura-123"}
+    )
+    assert respuesta.status_code == 400
+
+
+# ------------------------------------------------------------------------- CSRF
+
+@pytest.mark.parametrize("cabecera", ["", "token-incorrecto"])
+def test_csrf_exige_el_token_con_sesion(client, creador_usuarios, iniciar_sesion, cabecera):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    respuesta = client.post("/api/logout", headers={"X-CSRF-Token": cabecera})
+    assert respuesta.status_code == 403
+    assert client.get("/api/usuarios/me").status_code == 200  # la sesión sigue viva
+
+
+def test_csrf_no_afecta_a_las_lecturas(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    assert client.get("/api/usuarios/me", headers={"X-CSRF-Token": ""}).status_code == 200
+
+
+# ----------------------------------------------------------------- limitador
+
+def test_limitador_guarda_los_intentos_en_la_bd(app, client, creador_usuarios):
+    creador_usuarios("ana")
+    for _ in range(5):
+        client.post("/api/login", json={"usuario": "ana", "contrasena": "mala"})
+    with app.app_context():
+        assert EventoLimite.query.filter(EventoLimite.clave.like("login:%")).count() == 5
+        # Un limitador nuevo (como tras reiniciar la app) sigue viendo el bloqueo.
+        assert security.LimitadorIntentos().espera("login:127.0.0.1:ana", 5, 15 * 60) > 0
+
+
+# ---------------------------------------------------------- verificación en dos pasos
+
+def _activar_2fa(client):
+    secreto = client.post("/api/usuarios/me/2fa/iniciar", json={"contrasena": "clave123"}).get_json()["secreto"]
+    paso = int(time.time() // totp.PASO_SEGUNDOS)
+    respuesta = client.post("/api/usuarios/me/2fa/activar", json={"codigo": totp._codigo(secreto, paso)})
+    assert respuesta.status_code == 200
+    return secreto, paso
+
+
+def test_2fa_exige_codigo_en_el_login(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    secreto, paso = _activar_2fa(client)
+    client.post("/api/logout")
+
+    sin_codigo = client.post("/api/login", json={"usuario": "ana", "contrasena": "clave123"})
+    assert sin_codigo.status_code == 401 and sin_codigo.get_json()["requiere_2fa"] is True
+    assert client.get_cookie("mettav_access") is None
+
+    malo = client.post("/api/login", json={"usuario": "ana", "contrasena": "clave123", "codigo": "000000"})
+    assert malo.status_code == 401
+
+    codigo = totp._codigo(secreto, paso + 1)  # el del paso de la activación ya está usado
+    bueno = client.post("/api/login", json={"usuario": "ana", "contrasena": "clave123", "codigo": codigo})
+    assert bueno.status_code == 200
+
+    # El mismo código no se puede reutilizar.
+    client.post("/api/logout")
+    repetido = client.post("/api/login", json={"usuario": "ana", "contrasena": "clave123", "codigo": codigo})
+    assert repetido.status_code == 401
+
+
+def test_2fa_se_desactiva_con_contrasena_y_codigo(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    secreto, paso = _activar_2fa(client)
+    mal = client.post("/api/usuarios/me/2fa/desactivar", json={"contrasena": "clave123", "codigo": "000000"})
+    assert mal.status_code == 400
+    bien = client.post(
+        "/api/usuarios/me/2fa/desactivar",
+        json={"contrasena": "clave123", "codigo": totp._codigo(secreto, paso + 1)},
+    )
+    assert bien.status_code == 200
+    client.post("/api/logout")
+    assert iniciar_sesion("ana").status_code == 200
+
+
+def test_totp_coincide_con_el_vector_de_la_rfc_6238():
+    secreto = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # "12345678901234567890" en base32
+    assert totp._codigo(secreto, 59 // 30) == "287082"
+
+
+# ----------------------------------------------------------- bitácora de accesos
+
+def test_bitacora_registra_accesos_y_solo_la_ve_un_admin(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("jefe", es_admin=True)
+    creador_usuarios("ana")
+    client.post("/api/login", json={"usuario": "ana", "contrasena": "mala"})
+    iniciar_sesion("ana")
+    assert client.get("/api/accesos").status_code == 403
+    client.post("/api/logout")
+
+    iniciar_sesion("jefe")
+    eventos = [(a["evento"], a["usuario"]) for a in client.get("/api/accesos").get_json()["accesos"]]
+    assert ("login_fallido", "ana") in eventos
+    assert ("login", "ana") in eventos
+    solo_fallos = client.get("/api/accesos?solo_fallos=1").get_json()["accesos"]
+    assert solo_fallos and all(not a["exito"] for a in solo_fallos)

@@ -6,7 +6,7 @@ from sqlalchemy import inspect, text
 
 from .database import opciones_motor, url_base_de_datos
 from .extensions import db
-from .security import configurar_seguridad, resolver_clave_secreta
+from .security import configurar_seguridad, resolver_clave_secreta, validar_contrasena
 
 
 def _sembrar_admin(app: Flask) -> None:
@@ -30,6 +30,15 @@ def _sembrar_admin(app: Flask) -> None:
     from .models import Usuario
 
     if Usuario.query.filter_by(usuario=nombre).first() is not None:
+        return
+
+    motivo = validar_contrasena(clave, nombre)
+    if motivo is not None:
+        app.logger.error(
+            "ADMIN_PASSWORD no es segura (%s) y no se crea el administrador '%s'. "
+            "Define una contraseña propia, larga y no común.",
+            motivo, nombre,
+        )
         return
 
     usuario = Usuario(usuario=nombre, es_admin=True)
@@ -129,6 +138,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             "telefono": "VARCHAR(32)",
             "direccion": "VARCHAR(255)",
             "imagen_perfil": "VARCHAR(500)",
+            "totp_secreto": "VARCHAR(64)",
+            "totp_activo": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "totp_ultimo_paso": "BIGINT",
         }
         missing_columns = {
             column_name: column_type

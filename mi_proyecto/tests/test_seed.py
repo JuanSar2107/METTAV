@@ -1,5 +1,7 @@
 """Tests del primer administrador creado a partir del entorno."""
 
+import pytest
+
 from mi_app import create_app
 from mi_app.extensions import db
 from mi_app.models import Usuario
@@ -78,6 +80,18 @@ def test_no_sobrescribe_un_usuario_existente(tmp_path, monkeypatch):
 def test_no_crea_admin_si_falta_la_contrasena(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_USER", "admin")
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+
+    app = _crear_app(tmp_path)
+    with app.app_context():
+        assert Usuario.query.count() == 0
+        db.session.remove()
+        db.drop_all()
+
+
+@pytest.mark.parametrize("clave", ["cambia-esta-clave", "corta1", "administrador", "admin-clave-2026"])
+def test_no_crea_admin_con_contrasena_insegura(tmp_path, monkeypatch, clave):
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", clave)
 
     app = _crear_app(tmp_path)
     with app.app_context():

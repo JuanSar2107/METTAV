@@ -32,21 +32,21 @@ def test_me_sin_sesion_401(client):
 
 
 def test_registrar_requiere_sesion(client):
-    respuesta = client.post("/api/usuarios", json={"usuario": "nuevo", "contrasena": "clave123"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "nuevo", "contrasena": "clave-segura-123"})
     assert respuesta.status_code == 401
 
 
 def test_registrar_usuario_normal_no_autorizado(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("normal", es_admin=False)
     iniciar_sesion("normal")
-    respuesta = client.post("/api/usuarios", json={"usuario": "nuevo", "contrasena": "clave123"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "nuevo", "contrasena": "clave-segura-123"})
     assert respuesta.status_code == 403
 
 
 def test_admin_registra_usuario(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("admin", es_admin=True)
     iniciar_sesion("admin")
-    respuesta = client.post("/api/usuarios", json={"usuario": "nuevo", "contrasena": "clave123"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "nuevo", "contrasena": "clave-segura-123"})
     assert respuesta.status_code == 201
     cuerpo = respuesta.get_json()["usuario"]
     assert cuerpo["usuario"] == "nuevo"
@@ -57,7 +57,7 @@ def test_registrar_usuario_duplicado_409(client, creador_usuarios, iniciar_sesio
     creador_usuarios("admin", es_admin=True)
     creador_usuarios("duplicado")
     iniciar_sesion("admin")
-    respuesta = client.post("/api/usuarios", json={"usuario": "duplicado", "contrasena": "clave123"})
+    respuesta = client.post("/api/usuarios", json={"usuario": "duplicado", "contrasena": "clave-segura-123"})
     assert respuesta.status_code == 409
 
 
@@ -68,7 +68,7 @@ def test_registrar_datos_invalidos(client, creador_usuarios, iniciar_sesion):
     r1 = client.post("/api/usuarios", json={"usuario": "x", "contrasena": "ab"})  # muy corta
     assert r1.status_code == 400
 
-    r2 = client.post("/api/usuarios", json={"contrasena": "clave123"})  # falta usuario
+    r2 = client.post("/api/usuarios", json={"contrasena": "clave-segura-123"})  # falta usuario
     assert r2.status_code == 400
 
     r3 = client.post("/api/usuarios", data="sin-json", content_type="application/json")  # JSON inválido
@@ -104,13 +104,13 @@ def test_actualizar_con_usuario_en_uso_409(client, creador_usuarios, iniciar_ses
 def test_actualizar_contrasena(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("ana")
     iniciar_sesion("ana")
-    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva123", "contrasena_actual": "clave123"})
+    respuesta = client.put("/api/usuarios/me", json={"contrasena": "nueva-segura-123", "contrasena_actual": "clave123"})
     assert respuesta.status_code == 200
     # La sesión que hizo el cambio sigue abierta
     assert client.get("/api/usuarios/me").status_code == 200
 
     client.post("/api/logout")
-    nuevo_login = client.post("/api/login", json={"usuario": "ana", "contrasena": "nueva123"})
+    nuevo_login = client.post("/api/login", json={"usuario": "ana", "contrasena": "nueva-segura-123"})
     assert nuevo_login.status_code == 200
 
 

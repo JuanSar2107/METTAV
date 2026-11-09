@@ -18,6 +18,10 @@ class Usuario(db.Model):
     telefono = db.Column(db.String(32), nullable=True)
     direccion = db.Column(db.String(255), nullable=True)
     imagen_perfil = db.Column(db.String(500), nullable=True)
+    # Verificación en dos pasos (TOTP). Solo exige código si totp_activo es True.
+    totp_secreto = db.Column(db.String(64), nullable=True)
+    totp_activo = db.Column(db.Boolean, nullable=False, default=False)
+    totp_ultimo_paso = db.Column(db.BigInteger, nullable=True)
 
     @property
     def puede_operar(self) -> bool:
@@ -37,3 +41,53 @@ class Usuario(db.Model):
 
     def verificar_contrasena(self, contrasena: str) -> bool:
         return check_password_hash(self.contrasena_hash, contrasena)
+
+
+class SesionToken(db.Model):
+    """Una sesión iniciada: familia de tokens de refresco que se puede revocar.
+
+    El JWT de acceso dura pocos minutos; el de refresco se rota en cada uso y
+    su `jti` vigente se guarda aquí, así el servidor puede cerrar la sesión
+    (logout, cambio de contraseña) y detectar un token robado y reutilizado.
+    """
+
+    __tablename__ = "sesiones_token"
+
+    id = db.Column(db.Integer, primary_key=True)
+    familia = db.Column(db.String(32), unique=True, nullable=False)
+    id_usuario = db.Column(db.Integer, nullable=False, index=True)
+    jti_actual = db.Column(db.String(32), nullable=False)
+    jti_anterior = db.Column(db.String(32), nullable=True)
+    rotada_en = db.Column(db.BigInteger, nullable=False, default=0)
+    inicio = db.Column(db.BigInteger, nullable=False)
+    expira = db.Column(db.BigInteger, nullable=False)
+    ultimo_uso = db.Column(db.BigInteger, nullable=False)
+    revocada = db.Column(db.Boolean, nullable=False, default=False)
+    ip = db.Column(db.String(64), nullable=True)
+    agente = db.Column(db.String(200), nullable=True)
+
+
+class RegistroAcceso(db.Model):
+    """Bitácora de inicios de sesión, cierres y eventos sospechosos."""
+
+    __tablename__ = "registro_accesos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    momento = db.Column(db.DateTime, nullable=False, index=True)
+    evento = db.Column(db.String(24), nullable=False)
+    exito = db.Column(db.Boolean, nullable=False)
+    usuario = db.Column(db.String(80), nullable=True)
+    id_usuario = db.Column(db.Integer, nullable=True)
+    ip = db.Column(db.String(64), nullable=True)
+    agente = db.Column(db.String(200), nullable=True)
+    detalle = db.Column(db.String(200), nullable=True)
+
+
+class EventoLimite(db.Model):
+    """Intentos contados por el limitador; en la BD para sobrevivir reinicios."""
+
+    __tablename__ = "eventos_limite"
+
+    id = db.Column(db.Integer, primary_key=True)
+    clave = db.Column(db.String(200), nullable=False, index=True)
+    momento = db.Column(db.Float, nullable=False)

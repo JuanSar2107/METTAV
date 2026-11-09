@@ -28,6 +28,14 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
       # Detrás del proxy de Coolify: IP real del cliente y detección de HTTPS.
       TRUST_PROXY: "1"
+      # Número de proxies de confianza delante de la app (Coolify = 1).
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      # Cookies de sesión siempre con Secure (este archivo es para despliegues con HTTPS).
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
+      # Sesiones JWT: acceso, inactividad y duración máxima.
+      JWT_ACCESO_MINUTOS: ${JWT_ACCESO_MINUTOS:-15}
+      JWT_INACTIVIDAD_MINUTOS: ${JWT_INACTIVIDAD_MINUTOS:-30}
+      JWT_SESION_MAX_HORAS: ${JWT_SESION_MAX_HORAS:-12}
       # Vacía = SQLite en el volumen mettav_data. Para PostgreSQL: postgresql://usuario:clave@host:5432/bd
       DATABASE_URL: ${DATABASE_URL:-}
       ADMIN_USER: ${ADMIN_USER:-admin}

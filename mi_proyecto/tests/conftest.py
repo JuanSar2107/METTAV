@@ -11,6 +11,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from flask.testing import FlaskClient
 from PIL import Image
 
 # Permite importar `mi_app` aunque pytest se ejecute desde otra carpeta
@@ -20,6 +21,18 @@ from mi_app import create_app
 from mi_app.database import normalizar_url
 from mi_app.extensions import db
 from mi_app.models import Usuario  # noqa: E402
+
+
+class ClienteConCsrf(FlaskClient):
+    """Como un navegador con csrf.js: manda X-CSRF-Token con la cookie recibida."""
+
+    def open(self, *args, **kwargs):
+        cookie = self.get_cookie("mettav_csrf")
+        if cookie is not None:
+            cabeceras = dict(kwargs.get("headers") or {})
+            cabeceras.setdefault("X-CSRF-Token", cookie.value)
+            kwargs["headers"] = cabeceras
+        return super().open(*args, **kwargs)
 
 
 @pytest.fixture()
@@ -39,6 +52,7 @@ def app(tmp_path):
         }
     )
     # Las imágenes subidas van a una carpeta temporal, no a la del proyecto
+    app.test_client_class = ClienteConCsrf
     app.static_folder = str(tmp_path / "static")
     (tmp_path / "static" / "images" / "inventory").mkdir(parents=True, exist_ok=True)
     (tmp_path / "static" / "images" / "profiles").mkdir(parents=True, exist_ok=True)

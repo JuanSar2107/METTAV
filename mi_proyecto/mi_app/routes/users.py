@@ -1,21 +1,25 @@
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from mi_app import totp
 from mi_app.validacion import correo_valido, mensaje_seguro
 from mi_app.exportar import respuesta_excel, respuesta_pdf
 from mi_app.extensions import db
 from mi_app.security import (
-    MIN_LARGO_CONTRASENA,
+    cerrar_sesion_actual,
     iniciar_sesion_usuario,
     ip_cliente,
     limitador,
+    registrar_acceso,
     renovar_sello,
     respuesta_limite,
+    revocar_sesiones_de,
     usuario_actual,
+    validar_contrasena,
 )
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
-from mi_app.models import Usuario
+from mi_app.models import RegistroAcceso, SesionToken, Usuario
 
 usuarios_bp = Blueprint("usuarios", __name__, url_prefix="/api")
 
@@ -23,6 +27,8 @@ usuarios_bp = Blueprint("usuarios", __name__, url_prefix="/api")
 _FALLOS_POR_USUARIO = 5
 _FALLOS_POR_IP = 20
 _VENTANA_LOGIN = 15 * 60
+# Códigos de verificación en dos pasos: tope por usuario, sin importar la IP.
+_FALLOS_2FA_POR_USUARIO = 10
 # Hash de relleno para que un usuario inexistente tarde lo mismo que uno real.
 _HASH_RELLENO = generate_password_hash("relleno-para-igualar-tiempos")
 
@@ -51,12 +57,8 @@ def _usuario_actual() -> Usuario | None:
     return usuario_actual()
 
 
-def _validar_contrasena_nueva(contrasena) -> str | None:
-    if not isinstance(contrasena, str) or not MIN_LARGO_CONTRASENA <= len(contrasena) <= 256:
-        return f"La contraseña debe tener entre {MIN_LARGO_CONTRASENA} y 256 caracteres."
-    if contrasena.isdigit() or contrasena.isalpha():
-        return "La contraseña debe combinar letras y números o símbolos."
-    return None
+def _validar_contrasena_nueva(contrasena, nombre: str | None = None) -> str | None:
+    return validar_contrasena(contrasena, nombre)
 
 
 @usuarios_bp.post("/usuarios")
@@ -75,7 +77,7 @@ def registrar_usuario():
     contrasena = datos.get("contrasena")
     if not isinstance(nombre, str) or not nombre.strip() or len(nombre.strip()) > 80:
         return jsonify(error="El campo 'usuario' es obligatorio."), 400
-    error_contrasena = _validar_contrasena_nueva(contrasena)
+    error_contrasena = _validar_contrasena_nueva(contrasena, nombre.strip())
     if error_contrasena is not None:
         return jsonify(error=error_contrasena), 400
 
@@ -162,6 +164,7 @@ def iniciar_sesion():
         limitador().espera(clave_ip, _FALLOS_POR_IP, _VENTANA_LOGIN),
     )
     if espera:
+        registrar_acceso("login_bloqueado", False, usuario=nombre, detalle="Demasiados intentos fallidos.")
         return respuesta_limite(espera, "Demasiados intentos fallidos.")
 
     usuario = Usuario.query.filter_by(usuario=nombre).first()
@@ -170,7 +173,29 @@ def iniciar_sesion():
     if usuario is None or not usuario.verificar_contrasena(contrasena):
         limitador().registrar(clave_usuario)
         limitador().registrar(clave_ip)
+        registrar_acceso("login_fallido", False, usuario=nombre,
+                         id_usuario=usuario.id_usuario if usuario else None)
         return jsonify(error="Usuario o contraseña incorrectos."), 401
+
+    if usuario.totp_activo:
+        codigo = datos.get("codigo")
+        if codigo in (None, ""):
+            return jsonify(error="Escribe el código de verificación de tu aplicación.", requiere_2fa=True), 401
+        clave_2fa = f"2fa:{usuario.id_usuario}"
+        espera = max(
+            limitador().espera(clave_2fa, _FALLOS_2FA_POR_USUARIO, _VENTANA_LOGIN),
+            limitador().espera(clave_usuario, _FALLOS_POR_USUARIO, _VENTANA_LOGIN),
+        )
+        if espera:
+            return respuesta_limite(espera, "Demasiados intentos fallidos.")
+        paso = totp.verificar(usuario.totp_secreto or "", codigo, usuario.totp_ultimo_paso)
+        if paso is None:
+            for clave in (clave_2fa, clave_usuario, clave_ip):
+                limitador().registrar(clave)
+            registrar_acceso("login_2fa_fallido", False, usuario=nombre, id_usuario=usuario.id_usuario)
+            return jsonify(error="Código de verificación incorrecto.", requiere_2fa=True), 401
+        usuario.totp_ultimo_paso = paso  # el mismo código no sirve dos veces
+        db.session.commit()
 
     limitador().limpiar(clave_usuario)
     iniciar_sesion_usuario(usuario)
@@ -179,7 +204,7 @@ def iniciar_sesion():
 
 @usuarios_bp.post("/logout")
 def cerrar_sesion():
-    session.clear()
+    cerrar_sesion_actual()
     return jsonify(mensaje="Sesión cerrada.")
 
 
@@ -276,9 +301,11 @@ def actualizar_usuario_actual():
         actual = datos.get("contrasena_actual")
         if not isinstance(actual, str) or not usuario.verificar_contrasena(actual):
             return jsonify(error="Para cambiar la contraseña indica la actual en 'contrasena_actual'."), 403
-        error_contrasena = _validar_contrasena_nueva(datos["contrasena"])
+        error_contrasena = _validar_contrasena_nueva(datos["contrasena"], usuario.usuario)
         if error_contrasena is not None:
             return jsonify(error=error_contrasena), 400
+        if usuario.verificar_contrasena(datos["contrasena"]):
+            return jsonify(error="La contraseña nueva debe ser distinta de la actual."), 400
         usuario.establecer_contrasena(datos["contrasena"])
 
     try:
@@ -287,7 +314,9 @@ def actualizar_usuario_actual():
         db.session.rollback()
         return jsonify(error="Ese usuario ya está registrado."), 409
     # La sesión actual sigue abierta; las demás se cierran si cambió la contraseña.
-    renovar_sello(usuario)
+    if "contrasena" in datos:
+        renovar_sello(usuario)
+        registrar_acceso("cambio_contrasena", True, usuario=usuario.usuario, id_usuario=usuario.id_usuario)
     return jsonify(usuario=_respuesta_usuario(usuario))
 
 
@@ -304,7 +333,103 @@ def eliminar_usuario_actual():
     if usuario.es_admin and Usuario.query.filter_by(es_admin=True).count() <= 1:
         return jsonify(error="No puedes eliminar al único administrador."), 409
 
+    id_usuario = usuario.id_usuario
+    nombre = usuario.usuario
+    revocar_sesiones_de(id_usuario)
+    SesionToken.query.filter_by(id_usuario=id_usuario).delete()
     db.session.delete(usuario)
     db.session.commit()
-    session.clear()
+    registrar_acceso("cuenta_eliminada", True, usuario=nombre, id_usuario=id_usuario)
+    cerrar_sesion_actual()
     return jsonify(mensaje="Cuenta eliminada.")
+
+
+@usuarios_bp.post("/usuarios/me/2fa/iniciar")
+def iniciar_2fa():
+    """Genera un secreto TOTP para escanear en la app autenticadora; aún no exige código."""
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    datos = _leer_datos_json() or {}
+    contrasena = datos.get("contrasena")
+    if not isinstance(contrasena, str) or not usuario.verificar_contrasena(contrasena):
+        return jsonify(error="Confirma tu contraseña en 'contrasena'."), 403
+    if usuario.totp_activo:
+        return jsonify(error="La verificación en dos pasos ya está activa."), 409
+    usuario.totp_secreto = totp.generar_secreto()
+    usuario.totp_ultimo_paso = None
+    db.session.commit()
+    return jsonify(secreto=usuario.totp_secreto, uri=totp.uri_aprovisionamiento(usuario.totp_secreto, usuario.usuario))
+
+
+@usuarios_bp.post("/usuarios/me/2fa/activar")
+def activar_2fa():
+    """Activa la verificación en dos pasos si el código de la app autenticadora es correcto."""
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    datos = _leer_datos_json() or {}
+    if usuario.totp_activo or not usuario.totp_secreto:
+        return jsonify(error="Primero inicia la configuración de la verificación en dos pasos."), 409
+    paso = totp.verificar(usuario.totp_secreto, datos.get("codigo"))
+    if paso is None:
+        return jsonify(error="Código de verificación incorrecto."), 400
+    usuario.totp_activo = True
+    usuario.totp_ultimo_paso = paso
+    db.session.commit()
+    registrar_acceso("2fa_activada", True, usuario=usuario.usuario, id_usuario=usuario.id_usuario)
+    return jsonify(mensaje="Verificación en dos pasos activada.")
+
+
+@usuarios_bp.post("/usuarios/me/2fa/desactivar")
+def desactivar_2fa():
+    """Desactiva la verificación en dos pasos; pide la contraseña y un código vigente."""
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    datos = _leer_datos_json() or {}
+    contrasena = datos.get("contrasena")
+    if not isinstance(contrasena, str) or not usuario.verificar_contrasena(contrasena):
+        return jsonify(error="Confirma tu contraseña en 'contrasena'."), 403
+    if not usuario.totp_activo:
+        return jsonify(error="La verificación en dos pasos no está activa."), 409
+    if totp.verificar(usuario.totp_secreto or "", datos.get("codigo"), usuario.totp_ultimo_paso) is None:
+        return jsonify(error="Código de verificación incorrecto."), 400
+    usuario.totp_activo = False
+    usuario.totp_secreto = None
+    usuario.totp_ultimo_paso = None
+    db.session.commit()
+    registrar_acceso("2fa_desactivada", True, usuario=usuario.usuario, id_usuario=usuario.id_usuario)
+    return jsonify(mensaje="Verificación en dos pasos desactivada.")
+
+
+@usuarios_bp.get("/accesos")
+def listar_accesos():
+    """Bitácora de accesos (inicios de sesión, fallos, bloqueos); solo administradores."""
+    usuario = _usuario_actual()
+    if usuario is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.es_admin:
+        return jsonify(error="Solo un administrador puede ver la bitácora de accesos."), 403
+    try:
+        limite = min(max(int(request.args.get("limite", 100)), 1), 500)
+    except ValueError:
+        limite = 100
+    consulta = RegistroAcceso.query.order_by(RegistroAcceso.id.desc())
+    filtro = (request.args.get("usuario") or "").strip()
+    if filtro:
+        consulta = consulta.filter(RegistroAcceso.usuario == filtro)
+    if request.args.get("solo_fallos") == "1":
+        consulta = consulta.filter(RegistroAcceso.exito.is_(False))
+    return jsonify(accesos=[
+        {
+            "momento": r.momento.isoformat() + "Z",
+            "evento": r.evento,
+            "exito": r.exito,
+            "usuario": r.usuario,
+            "ip": r.ip,
+            "agente": r.agente,
+            "detalle": r.detalle,
+        }
+        for r in consulta.limit(limite).all()
+    ])

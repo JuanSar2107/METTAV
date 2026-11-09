@@ -4,6 +4,8 @@
     const password = document.querySelector("#password");
     const message = document.querySelector("#form-message");
     const submitButton = document.querySelector("#submit-button");
+    const otpGroup = document.querySelector("#otp-group");
+    const otp = document.querySelector("#otp");
 
     if (
         !(form instanceof HTMLFormElement) ||
@@ -47,11 +49,16 @@
                 body: JSON.stringify({
                     usuario: username.value,
                     contrasena: password.value,
+                    ...(otp instanceof HTMLInputElement && otp.value.trim() ? { codigo: otp.value.trim() } : {}),
                 }),
             });
             const result = await response.json();
 
             if (!response.ok) {
+                if (result.requiere_2fa && otpGroup instanceof HTMLElement && otp instanceof HTMLInputElement) {
+                    otpGroup.hidden = false;
+                    otp.focus();
+                }
                 message.dataset.state = "error";
                 message.textContent = result.error || "No se pudo completar la solicitud.";
                 message.hidden = false;
