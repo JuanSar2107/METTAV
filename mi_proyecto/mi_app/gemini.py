@@ -9,16 +9,21 @@ Variables de entorno:
 """
 
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
+
+from mi_app.validacion import ErrorValidacion
+
+_log = logging.getLogger(__name__)
 
 MODELO_POR_DEFECTO = "gemini-3.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 _TIEMPO_MAXIMO = 45
 
 
-class GeminiError(Exception):
+class GeminiError(ErrorValidacion):
     """Error al consultar Gemini; el mensaje ya es apto para mostrar al usuario."""
 
 
@@ -84,4 +89,6 @@ def _mensaje_error_http(error: urllib.error.HTTPError) -> str:
         return "El modelo configurado en GEMINI_MODEL no existe o no está disponible."
     if error.code == 429:
         return "Se alcanzó el límite de uso de Gemini. Espera un momento e inténtalo de nuevo."
-    return f"Gemini respondió con un error ({error.code}). {detalle}".strip()
+    # El detalle de Google puede incluir datos del proyecto: solo va al log.
+    _log.warning("Gemini respondió %s: %s", error.code, detalle)
+    return f"Gemini respondió con un error ({error.code}). Inténtalo más tarde."

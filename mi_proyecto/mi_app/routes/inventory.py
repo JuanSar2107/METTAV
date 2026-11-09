@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request, send_file, url_for
 from sqlalchemy import case, update
 from sqlalchemy.exc import IntegrityError
 
+from mi_app.validacion import ErrorValidacion, mensaje_seguro
 from mi_app.exportar import respuesta_excel, respuesta_pdf
 from mi_app.routes.reports import hora_colombia
 from mi_app.extensions import db
@@ -61,9 +62,9 @@ def datos_sizfra(datos) -> dict:
     operacion = str(datos.get("operacion_sizfra") or "").strip()
     formulario = str(datos.get("formulario") or "").strip().upper()
     if operacion and not _RE_OPERACION.match(operacion):
-        raise ValueError("La operación de Sizfra debe ser un número, por ejemplo 420.")
+        raise ErrorValidacion("La operación de Sizfra debe ser un número, por ejemplo 420.")
     if formulario and not _RE_FORMULARIO.match(formulario):
-        raise ValueError("El formulario de Sizfra solo admite letras, números y guiones (máximo 24).")
+        raise ErrorValidacion("El formulario de Sizfra solo admite letras, números y guiones (máximo 24).")
     return {"operacion_sizfra": operacion or None, "formulario": formulario or None}
 
 
@@ -79,7 +80,7 @@ def _sin_tildes(texto: str) -> str:
 def _observaciones(datos) -> str | None:
     texto = str(datos.get("observaciones") or "").strip()
     if len(texto) > 2000:
-        raise ValueError("Las observaciones no pueden superar 2000 caracteres.")
+        raise ErrorValidacion("Las observaciones no pueden superar 2000 caracteres.")
     return texto or None
 
 
@@ -89,11 +90,11 @@ def campos_servicio(datos) -> dict:
     tipo = str(datos.get("tipo_servicio") or "").strip()
     estado = str(datos.get("estado_servicio") or "").strip()
     if len(cliente) > 160:
-        raise ValueError("El cliente no puede superar 160 caracteres.")
+        raise ErrorValidacion("El cliente no puede superar 160 caracteres.")
     if tipo and tipo not in TIPOS_SERVICIO:
-        raise ValueError("El tipo de servicio debe ser: " + ", ".join(TIPOS_SERVICIO) + ".")
+        raise ErrorValidacion("El tipo de servicio debe ser: " + ", ".join(TIPOS_SERVICIO) + ".")
     if estado and estado not in ESTADOS_SERVICIO:
-        raise ValueError("El estado del servicio debe ser: " + ", ".join(ESTADOS_SERVICIO) + ".")
+        raise ErrorValidacion("El estado del servicio debe ser: " + ", ".join(ESTADOS_SERVICIO) + ".")
     return {"cliente": cliente or None, "tipo_servicio": tipo or None, "estado_servicio": estado or None}
 
 
@@ -159,7 +160,7 @@ def _guardar_imagen_articulo(archivo):
     tamano = archivo.stream.tell()
     archivo.stream.seek(0)
     if tamano > _MAX_BYTES_IMAGEN:
-        raise ValueError("Cada imagen puede pesar máximo 5 MB.")
+        raise ErrorValidacion("Cada imagen puede pesar máximo 5 MB.")
     return guardar_imagen(archivo, "inventory")
 
 
@@ -237,7 +238,7 @@ def siguiente_codigo():
             request.args.get("tipo", "").strip().upper(),
         )
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
     return jsonify(codigo=codigo, codigo_interno=interno)
 
 
@@ -285,7 +286,7 @@ def crear_articulo():
             escrito = normalizar_codigo(request.form.get("codigo", ""))
             if escrito and escrito != normalizar_codigo(request.form.get("codigo_sugerido", "")):
                 if not codigo_valido(escrito):
-                    raise ValueError("El código ZF solo admite letras, números y guiones (máximo 24).")
+                    raise ErrorValidacion("El código ZF solo admite letras, números y guiones (máximo 24).")
                 validar_sin_salto(escrito)
                 codigo = escrito
             interno_sugerido = normalizar_codigo(request.form.get("codigo_interno_sugerido", ""))
@@ -294,11 +295,11 @@ def crear_articulo():
         else:
             codigo = normalizar_codigo(request.form.get("codigo", ""))
             if codigo and not codigo_valido(codigo):
-                raise ValueError("El código ZF solo admite letras, números y guiones (máximo 24).")
+                raise ErrorValidacion("El código ZF solo admite letras, números y guiones (máximo 24).")
             if codigo:
                 validar_sin_salto(codigo)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
     if codigo and ArticuloInventario.query.filter_by(codigo=codigo).first() is not None:
         return jsonify(error=f"Ya existe un artículo con el código {codigo}."), 409
     if codigo_automatico:
@@ -317,7 +318,7 @@ def crear_articulo():
     except ValueError as error:
         for ruta_imagen in rutas_imagen:
             ruta_imagen.unlink(missing_ok=True)
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     articulo = ArticuloInventario(
         codigo=codigo or f"ADM-{uuid4().hex[:10].upper()}",
@@ -392,7 +393,7 @@ def actualizar_articulo(id_articulo: int):
         nuevos.update(campos_zona_franca(request.form))
         nuevos.update(campos_trazabilidad(request.form))
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
     # El código interno y el tipo forman parte del código: no se editan.
     nuevos["codigo_interno"] = articulo.codigo_interno
     nuevos["tipo"] = articulo.tipo
@@ -419,7 +420,7 @@ def actualizar_articulo(id_articulo: int):
     except ValueError as error:
         for ruta_imagen in rutas_nuevas:
             ruta_imagen.unlink(missing_ok=True)
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
     if rutas_nuevas or imagenes_anteriores:
         for columna, valor in _columnas_imagen(finales).items():
             setattr(articulo, columna, valor)
@@ -465,7 +466,7 @@ def importar_excel():
     try:
         filas, errores, avisos = leer_excel(archivo.stream)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     usuario = _usuario_actual()
     existentes = {
@@ -670,7 +671,7 @@ def actualizar_servicio(id_articulo: int):
     try:
         nuevos = campos_servicio(datos)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     nombres = {"cliente": "cliente", "tipo_servicio": "servicio", "estado_servicio": "estado"}
     cambios = [
@@ -775,7 +776,7 @@ def retirar_articulo(id_articulo: int):
         sizfra = datos_sizfra(datos)
         observaciones = _observaciones(datos)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     articulo = _articulo_activo(id_articulo)
     if articulo is None:
@@ -849,7 +850,7 @@ def ingresar_articulo(id_articulo: int):
         sizfra = datos_sizfra(datos)
         observaciones = _observaciones(datos)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     articulo = _articulo_activo(id_articulo)
     if articulo is None:
@@ -861,7 +862,7 @@ def ingresar_articulo(id_articulo: int):
         try:
             documento_archivo, documento_nombre, _ruta = guardar_documento(documento)
         except ValueError as error:
-            return jsonify(error=str(error)), 400
+            return jsonify(error=mensaje_seguro(error)), 400
 
     # Los ingresos no tienen tope (materia prima y consumibles rotan constantemente).
     if _sumar_stock(id_articulo, cantidad) == 0:
@@ -958,7 +959,7 @@ def crear_salida_integrada():
     try:
         sizfra = datos_sizfra(datos)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     articulos = {
         a.id: a

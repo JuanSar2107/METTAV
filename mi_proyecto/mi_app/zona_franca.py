@@ -10,6 +10,7 @@ import unicodedata
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
+from mi_app.validacion import ErrorValidacion, mensaje_seguro
 from mi_app.extensions import db
 from mi_app.models.inventory import (
     GRUPOS_INVENTARIO,
@@ -72,9 +73,9 @@ def leer_valor_fob(texto: str) -> Decimal | None:
     try:
         valor = Decimal(texto)
     except InvalidOperation:
-        raise ValueError("El valor FOB debe ser un número en dólares, por ejemplo 1200 o 1200,50.")
+        raise ErrorValidacion("El valor FOB debe ser un número en dólares, por ejemplo 1200 o 1200,50.")
     if valor < 0 or valor >= Decimal("1e12"):
-        raise ValueError("El valor FOB debe ser un número positivo.")
+        raise ErrorValidacion("El valor FOB debe ser un número positivo.")
     return valor.quantize(Decimal("0.01"))
 
 
@@ -93,21 +94,21 @@ def campos_zona_franca(datos) -> dict:
     estado = _texto(datos.get("estado"))
 
     if codigo_interno and (len(codigo_interno) > 32 or not _RE_CODIGO.match(codigo_interno)):
-        raise ValueError("El código interno solo admite letras, números y guiones (máximo 32).")
+        raise ErrorValidacion("El código interno solo admite letras, números y guiones (máximo 32).")
     if grupo and grupo.zfill(3) not in GRUPOS_INVENTARIO:
-        raise ValueError("El grupo de inventario debe ser 001, 002, 003 o 004.")
+        raise ErrorValidacion("El grupo de inventario debe ser 001, 002, 003 o 004.")
     if len(tipo) > 8:
-        raise ValueError("El tipo no puede superar 8 caracteres.")
+        raise ErrorValidacion("El tipo no puede superar 8 caracteres.")
     if len(marca) > 80:
-        raise ValueError("La marca no puede superar 80 caracteres.")
+        raise ErrorValidacion("La marca no puede superar 80 caracteres.")
     if marca.upper() == "N/A":
         marca = ""
     if subpartida and not _RE_SUBPARTIDA.match(subpartida):
-        raise ValueError("La subpartida arancelaria debe tener el formato 8413.30.10.00.")
+        raise ErrorValidacion("La subpartida arancelaria debe tener el formato 8413.30.10.00.")
     if procedencia and procedencia not in PROCEDENCIAS:
-        raise ValueError("La procedencia debe ser Nacional o Extranjera.")
+        raise ErrorValidacion("La procedencia debe ser Nacional o Extranjera.")
     if len(estado) > 40:
-        raise ValueError("El estado no puede superar 40 caracteres.")
+        raise ErrorValidacion("El estado no puede superar 40 caracteres.")
 
     return {
         "codigo_interno": codigo_interno or None,
@@ -152,7 +153,7 @@ def leer_fecha(valor) -> date | None:
             return date(anio, mes, dia)
         except ValueError:
             pass
-    raise ValueError(f"La fecha '{_texto(valor)}' no es válida. Usa 08/05/2026 o '8 de mayo del 2026'.")
+    raise ErrorValidacion(f"La fecha '{_texto(valor)}' no es válida. Usa 08/05/2026 o '8 de mayo del 2026'.")
 
 
 def campos_trazabilidad(datos) -> dict:
@@ -170,7 +171,7 @@ def campos_trazabilidad(datos) -> dict:
     campos = {}
     for campo, (valor, maximo) in textos.items():
         if len(valor) > maximo:
-            raise ValueError(f"El campo {campo.replace('_', ' ')} no puede superar {maximo} caracteres.")
+            raise ErrorValidacion(f"El campo {campo.replace('_', ' ')} no puede superar {maximo} caracteres.")
         campos[campo] = valor or None
     campos["fecha_ingreso"] = leer_fecha(datos.get("fecha_ingreso"))
     campos["fecha_retiro"] = leer_fecha(datos.get("fecha_retiro"))
@@ -196,7 +197,7 @@ def siguiente_consecutivo(categoria: str, tipo: str) -> int:
 def codigos_siguientes(categoria: str, ubicacion: str, tipo: str) -> tuple[str, str]:
     """(código ZF, código interno) que siguen, con las mismas fórmulas del Excel."""
     if categoria not in CATEGORIAS_SIGLA or ubicacion not in UBICACIONES_SIGLA or tipo not in TIPOS_CODIGO:
-        raise ValueError("Elige la categoría, la ubicación y el tipo del código.")
+        raise ErrorValidacion("Elige la categoría, la ubicación y el tipo del código.")
     numero = siguiente_consecutivo(categoria, tipo)
     return f"ZF-{categoria}-{tipo}-{numero:03d}", f"{categoria}-{ubicacion}-{tipo}-{numero:03d}"
 
@@ -209,7 +210,7 @@ def validar_sin_salto(codigo: str) -> None:
     categoria, tipo, numero = coincidencia.groups()
     siguiente = siguiente_consecutivo(categoria, tipo)
     if int(numero) > siguiente:
-        raise ValueError(f"El código se salta el consecutivo: el siguiente es ZF-{categoria}-{tipo}-{siguiente:03d}.")
+        raise ErrorValidacion(f"El código se salta el consecutivo: el siguiente es ZF-{categoria}-{tipo}-{siguiente:03d}.")
 
 
 def normalizar_codigo(texto: str) -> str:
@@ -266,11 +267,11 @@ def _filas_de_archivo(archivo, nombre: str):
         try:
             libro = load_workbook(archivo, read_only=True, data_only=True)
         except Exception:
-            raise ValueError("El archivo no es un Excel (.xlsx) válido.")
+            raise ErrorValidacion("El archivo no es un Excel (.xlsx) válido.")
         filas = list(libro.worksheets[0].iter_rows(values_only=True))
         libro.close()
         return filas
-    raise ValueError("El reporte de Sizfra debe ser un archivo .xlsx o .csv.")
+    raise ErrorValidacion("El reporte de Sizfra debe ser un archivo .xlsx o .csv.")
 
 
 def leer_saldos_sizfra(archivo, nombre: str) -> tuple[dict[str, Decimal], dict[str, str]]:
@@ -287,7 +288,7 @@ def leer_saldos_sizfra(archivo, nombre: str) -> tuple[dict[str, Decimal], dict[s
         if indice_codigo is not None and indice_saldo is not None:
             break
     else:
-        raise ValueError(
+        raise ErrorValidacion(
             "No se encontraron las columnas de código y saldo. El archivo debe tener una columna "
             "'Código' (o 'Código ZF') y otra 'Saldo' (o 'Cantidad')."
         )
@@ -306,7 +307,7 @@ def leer_saldos_sizfra(archivo, nombre: str) -> tuple[dict[str, Decimal], dict[s
             continue  # totales, subtítulos u otras filas que no son de un código
         saldos[codigo] = saldos.get(codigo, Decimal("0")) + saldo
     if not saldos:
-        raise ValueError("El archivo no tiene filas con código y saldo.")
+        raise ErrorValidacion("El archivo no tiene filas con código y saldo.")
     columnas = {"codigo": _texto(filas[numero][indice_codigo]), "saldo": _texto(filas[numero][indice_saldo])}
     return saldos, columnas
 
@@ -391,7 +392,7 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict], list[dict]]:
     try:
         libro = load_workbook(archivo, read_only=True, data_only=True)
     except Exception:
-        raise ValueError("El archivo no es un Excel (.xlsx) válido.")
+        raise ErrorValidacion("El archivo no es un Excel (.xlsx) válido.")
 
     hoja = libro["Inventario Equipos"] if "Inventario Equipos" in libro.sheetnames else libro.worksheets[0]
     filas = hoja.iter_rows(values_only=True)
@@ -407,7 +408,7 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict], list[dict]]:
             break
     if not numero_encabezado:
         libro.close()
-        raise ValueError(
+        raise ErrorValidacion(
             "No se encontró la fila de encabezados. El Excel debe tener al menos las columnas "
             "'Código ZF' (o 'Consecutivo') y 'Descripción'."
         )
@@ -447,7 +448,7 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict], list[dict]]:
                 "estado": celda("estado"),
             })
         except ValueError as error:
-            errores.append({"fila": numero, "codigo": codigo, "error": str(error)})
+            errores.append({"fila": numero, "codigo": codigo, "error": mensaje_seguro(error)})
             continue
 
         datos_trazabilidad = {
@@ -459,12 +460,12 @@ def leer_excel(archivo) -> tuple[list[dict], list[dict], list[dict]]:
             try:
                 leer_fecha(datos_trazabilidad[campo_fecha])
             except ValueError as error:
-                avisos.append({"fila": numero, "codigo": codigo, "aviso": str(error)})
+                avisos.append({"fila": numero, "codigo": codigo, "aviso": mensaje_seguro(error)})
                 datos_trazabilidad[campo_fecha] = None
         try:
             campos.update(campos_trazabilidad(datos_trazabilidad))
         except ValueError as error:
-            errores.append({"fila": numero, "codigo": codigo, "error": str(error)})
+            errores.append({"fila": numero, "codigo": codigo, "error": mensaje_seguro(error)})
             continue
 
         stock_texto = celda("stock")

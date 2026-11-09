@@ -7,6 +7,10 @@ on:
       - master
   pull_request:
 
+# Mínimo privilegio: el job que publica la imagen amplía sus propios permisos.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Tests (pytest)

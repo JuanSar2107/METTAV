@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
+from mi_app.validacion import ErrorValidacion, mensaje_seguro
 from mi_app.exportar import respuesta_excel as _excel
 from mi_app.extensions import db
 from mi_app.models import ArticuloInventario, MovimientoInventario, RegistroAuditoria, SalidaIntegrada
@@ -40,14 +41,14 @@ def _fecha_param(nombre: str) -> date | None:
     try:
         return date.fromisoformat(texto)
     except ValueError:
-        raise ValueError(f"La fecha '{nombre}' debe tener el formato AAAA-MM-DD.")
+        raise ErrorValidacion(f"La fecha '{nombre}' debe tener el formato AAAA-MM-DD.")
 
 
 def _rango_utc() -> tuple[datetime | None, datetime | None]:
     """Convierte ?desde y ?hasta (días en Colombia, ambos incluidos) a UTC sin zona."""
     desde, hasta = _fecha_param("desde"), _fecha_param("hasta")
     if desde and hasta and desde > hasta:
-        raise ValueError("La fecha 'desde' no puede ser posterior a 'hasta'.")
+        raise ErrorValidacion("La fecha 'desde' no puede ser posterior a 'hasta'.")
 
     def a_utc(dia: date) -> datetime:
         return datetime.combine(dia, time.min, _HORA_COLOMBIA).astimezone(timezone.utc).replace(tzinfo=None)
@@ -157,7 +158,7 @@ def reporte_movimientos():
     try:
         desde, hasta = _rango_utc()
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     consulta = MovimientoInventario.query
     if desde:
@@ -208,7 +209,7 @@ def reporte_salidas_integradas():
     try:
         desde, hasta = _rango_utc()
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     consulta = SalidaIntegrada.query
     if desde:
@@ -303,7 +304,7 @@ def conciliacion():
     try:
         saldos, columnas = leer_saldos_sizfra(archivo.stream, archivo.filename)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
 
     solo_zf = (request.form.get("solo_zf") or "1") != "0"
     articulos = {

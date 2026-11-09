@@ -1,4 +1,6 @@
 (() => {
+    // Solo estos tipos se previsualizan: un SVG podría contener código.
+    const TIPOS_IMAGEN_PREVIA = new Set(["image/jpeg", "image/png", "image/webp"]);
     const logoutButton = document.querySelector("#logout-button");
     const searchInput = document.querySelector("#inventory-search");
     const categoryFilter = document.querySelector("#category-filter");
@@ -93,6 +95,13 @@
                 imagePreview.src = originalImage;
                 imagePreview.hidden = !originalImage;
                 imageInitials.hidden = Boolean(originalImage);
+                return;
+            }
+            if (!TIPOS_IMAGEN_PREVIA.has(image.type)) {
+                imageInput.value = "";
+                message.textContent = "La imagen debe ser JPEG, PNG o WEBP.";
+                message.dataset.state = "error";
+                message.hidden = false;
                 return;
             }
             if (image.size > 5 * 1024 * 1024) {
@@ -237,7 +246,7 @@
             } else if (file.size > 5 * 1024 * 1024) {
                 input.value = "";
                 show(baseSrc, "El archivo supera el límite de 5 MB. Elige otro.");
-            } else if (file.type.startsWith("image/")) {
+            } else if (TIPOS_IMAGEN_PREVIA.has(file.type)) {
                 objectUrl = URL.createObjectURL(file);
                 show(objectUrl, `Vas a subir: ${file.name}`);
             } else {

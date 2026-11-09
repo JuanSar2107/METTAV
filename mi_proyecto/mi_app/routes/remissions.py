@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 from sqlalchemy.exc import IntegrityError
 
+from mi_app.validacion import correo_valido, mensaje_seguro
 from mi_app.extensions import db
 from mi_app.models import ArticuloInventario, MovimientoInventario, Remision, RemisionLinea
 from mi_app.models.inventory import ESTADOS_SERVICIO, ORIGEN_REMISION, TIPOS_SERVICIO
@@ -29,7 +30,6 @@ EMPRESA = {
 
 _HORA_COLOMBIA = timezone(timedelta(hours=-5))
 _RE_NIT = re.compile(r"^[0-9][0-9.\- ]{3,30}$")
-_RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _LIMITES = {
     "cliente_nombre": 160, "cliente_nit": 32, "contacto": 120, "telefono": 60, "email": 160,
     "documento_entrega": 120, "observaciones": 2000,
@@ -63,7 +63,7 @@ def crear_remision():
         return jsonify(error="Indica el nombre del cliente."), 400
     if not _RE_NIT.match(campos["cliente_nit"]):
         return jsonify(error="Indica el NIT o la cédula del cliente, por ejemplo 900.059.427-0."), 400
-    if campos["email"] and not _RE_EMAIL.match(campos["email"]):
+    if campos["email"] and not correo_valido(campos["email"]):
         return jsonify(error="El correo del cliente no es válido."), 400
     tipo_servicio = _texto(datos, "tipo_servicio")
     if tipo_servicio and tipo_servicio not in TIPOS_SERVICIO:
@@ -71,7 +71,7 @@ def crear_remision():
     try:
         sizfra = datos_sizfra(datos)
     except ValueError as error:
-        return jsonify(error=str(error)), 400
+        return jsonify(error=mensaje_seguro(error)), 400
     try:
         fecha = date.fromisoformat(_texto(datos, "fecha")) if _texto(datos, "fecha") else datetime.now(_HORA_COLOMBIA).date()
     except ValueError:

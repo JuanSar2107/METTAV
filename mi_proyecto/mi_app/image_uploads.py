@@ -6,6 +6,8 @@ from flask import current_app
 from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.datastructures import FileStorage
 
+from mi_app.validacion import ErrorValidacion
+
 _FORMATOS_IMAGEN = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 _CARPETAS_PERMITIDAS = {"inventory", "profiles"}
 _MAX_PIXELES_IMAGEN = 20_000_000
@@ -13,18 +15,18 @@ _MAX_PIXELES_IMAGEN = 20_000_000
 
 def guardar_imagen(archivo: FileStorage | None, carpeta_nombre: str) -> tuple[str, Path]:
     if carpeta_nombre not in _CARPETAS_PERMITIDAS:
-        raise ValueError("La carpeta de imágenes no está permitida.")
+        raise ErrorValidacion("La carpeta de imágenes no está permitida.")
     if archivo is None or not archivo.filename:
-        raise ValueError("Selecciona una imagen.")
+        raise ErrorValidacion("Selecciona una imagen.")
 
     try:
         with Image.open(archivo.stream) as imagen:
             formato = imagen.format
             ancho, alto = imagen.size
             if formato not in _FORMATOS_IMAGEN:
-                raise ValueError("La imagen debe ser JPEG, PNG o WEBP.")
+                raise ErrorValidacion("La imagen debe ser JPEG, PNG o WEBP.")
             if ancho * alto > _MAX_PIXELES_IMAGEN:
-                raise ValueError("La imagen tiene dimensiones demasiado grandes.")
+                raise ErrorValidacion("La imagen tiene dimensiones demasiado grandes.")
             imagen.verify()
         archivo.stream.seek(0)
         with Image.open(archivo.stream) as imagen:
@@ -38,7 +40,7 @@ def guardar_imagen(archivo: FileStorage | None, carpeta_nombre: str) -> tuple[st
             else:
                 opciones = {"optimize": True}
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
-        raise ValueError("El archivo no es una imagen válida.") from error
+        raise ErrorValidacion("El archivo no es una imagen válida.") from error
 
     nombre_archivo = f"{uuid4().hex}{_FORMATOS_IMAGEN[formato]}"
     ruta = Path(current_app.static_folder) / "images" / carpeta_nombre / nombre_archivo

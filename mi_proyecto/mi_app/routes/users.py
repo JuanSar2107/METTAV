@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, request, session
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
-import re
 
+from mi_app.validacion import correo_valido, mensaje_seguro
 from mi_app.exportar import respuesta_excel, respuesta_pdf
 from mi_app.extensions import db
 from mi_app.security import (
@@ -205,7 +205,7 @@ def actualizar_perfil():
 
     if len(nombre_completo) > 120 or len(correo) > 254:
         return jsonify(error="El nombre o correo supera el largo permitido."), 400
-    if correo and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", correo) is None:
+    if correo and not correo_valido(correo):
         return jsonify(error="Escribe un correo electrónico válido."), 400
     if len(numero_identidad) > 32 or len(telefono) > 32 or len(direccion) > 255:
         return jsonify(error="La identidad, teléfono o dirección supera el largo permitido."), 400
@@ -226,7 +226,7 @@ def actualizar_perfil():
         try:
             nueva_imagen_url, ruta_nueva_imagen = guardar_imagen(archivo_imagen, "profiles")
         except ValueError as error:
-            return jsonify(error=str(error)), 400
+            return jsonify(error=mensaje_seguro(error)), 400
 
     imagen_anterior = usuario.imagen_perfil
     usuario.nombre_completo = nombre_completo or None

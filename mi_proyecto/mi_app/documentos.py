@@ -11,6 +11,8 @@ from flask import current_app
 from PIL import Image, UnidentifiedImageError
 from werkzeug.datastructures import FileStorage
 
+from mi_app.validacion import ErrorValidacion
+
 _FORMATOS_IMAGEN = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 _MIME = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
@@ -29,7 +31,7 @@ def _extension(archivo: FileStorage) -> str:
         formato = None
     archivo.stream.seek(0)
     if formato not in _FORMATOS_IMAGEN:
-        raise ValueError("El documento soporte debe ser un PDF o una imagen (JPG, PNG o WEBP).")
+        raise ErrorValidacion("El documento soporte debe ser un PDF o una imagen (JPG, PNG o WEBP).")
     return _FORMATOS_IMAGEN[formato]
 
 

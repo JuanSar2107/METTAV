@@ -1,5 +1,6 @@
 from flask import Blueprint, current_app, jsonify, request
 
+from mi_app.validacion import mensaje_seguro
 from mi_app import gemini
 from mi_app.extensions import db
 from mi_app.security import limitador, respuesta_limite, usuario_actual
@@ -274,6 +275,6 @@ def consultar_asistente():
         respuesta = gemini.consultar_gemini(instrucciones, mensajes)
     except gemini.GeminiError as error:
         current_app.logger.warning("Error del asistente Gemini: %s", error)
-        return jsonify(error=str(error)), 502
+        return jsonify(error=mensaje_seguro(error)), 502
 
     return jsonify(respuesta=respuesta)

@@ -11,6 +11,7 @@ import re
 from flask import Blueprint, current_app, jsonify
 from sqlalchemy.exc import IntegrityError
 
+from mi_app.validacion import ErrorValidacion
 from mi_app import gemini
 from mi_app.extensions import db
 from mi_app.models import (
@@ -92,14 +93,14 @@ def _traducir(lote: list[str]) -> list[str]:
     )
     inicio, fin = respuesta.find("["), respuesta.rfind("]")
     if inicio < 0 or fin < inicio:
-        raise ValueError("La respuesta no contiene un arreglo.")
+        raise ErrorValidacion("La respuesta no contiene un arreglo.")
     traducciones = json.loads(respuesta[inicio:fin + 1])
     if not isinstance(traducciones, list) or len(traducciones) != len(lote):
-        raise ValueError("La respuesta no coincide con el lote.")
+        raise ErrorValidacion("La respuesta no coincide con el lote.")
     resultado = []
     for original, traducido in zip(lote, traducciones):
         if not isinstance(traducido, str):
-            raise ValueError("La respuesta contiene un valor que no es texto.")
+            raise ErrorValidacion("La respuesta contiene un valor que no es texto.")
         traducido = " ".join(traducido.split())
         valido = traducido and len(traducido) <= len(original) * 3 + 200
         resultado.append(traducido if valido else original)

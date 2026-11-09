@@ -13,6 +13,8 @@ from pathlib import Path, PurePosixPath
 
 from flask import current_app
 
+from mi_app.validacion import ErrorValidacion
+
 _HORA_COLOMBIA = timezone(timedelta(hours=-5))
 _ARCHIVO_BD = "base_de_datos.sqlite3"
 PREFIJO = "mettav-respaldo"
@@ -78,7 +80,7 @@ def restaurar_respaldo(zip_origen: Path, url_bd: str, carpetas_archivos: dict[st
 
     with zipfile.ZipFile(zip_origen) as archivo:
         if _ARCHIVO_BD not in archivo.namelist():
-            raise ValueError("El archivo no es una copia de seguridad de METTAV.")
+            raise ErrorValidacion("El archivo no es una copia de seguridad de METTAV.")
         with tempfile.TemporaryDirectory() as temporal:
             copia_bd = Path(temporal) / _ARCHIVO_BD
             copia_bd.write_bytes(archivo.read(_ARCHIVO_BD))
