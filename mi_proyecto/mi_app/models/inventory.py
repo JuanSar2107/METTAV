@@ -333,3 +333,13 @@ class Categoria(db.Model):
 
     def to_dict(self):
         return {"id": self.id, "nombre": self.nombre}
+
+
+class TraduccionTexto(db.Model):
+    """Traducción guardada de un texto del inventario, para no pedirla dos veces."""
+
+    __tablename__ = "traducciones_texto"
+
+    clave = db.Column(db.String(64), primary_key=True)
+    origen = db.Column(db.Text, nullable=False)
+    ingles = db.Column(db.Text, nullable=False)

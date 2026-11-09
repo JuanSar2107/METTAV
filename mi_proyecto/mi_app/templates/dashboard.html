@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
-<main class="dashboard-page">
+<main class="dashboard-page" data-translations-url="{{ url_for('traducciones.traducciones_visibles') }}">
     <div class="bg-overlay" aria-hidden="true"></div>
 
     <section class="dashboard-shell" aria-labelledby="dashboard-title">
@@ -25,6 +25,10 @@
                 </span>
             </a>
             <div class="account-controls">
+                <button class="btn-logout btn-manual" id="language-toggle" type="button" data-no-translate>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.500 5.600 12 3Z" /></svg>
+                    <span>English</span>
+                </button>
                 <a class="btn-logout btn-manual" id="manual-button" href="{{ url_for('main.manual_usuario') }}" title="Descargar el manual de usuario" aria-label="Descargar el manual de usuario">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5Zm0 15a2 2 0 0 0 2 2h13v-4M12 7v6m-2.5-2.5L12 13l2.5-2.5" />
@@ -1455,6 +1459,7 @@
     <span id="action-toast-message"></span>
 </div>
 
+<script src="{{ url_for('static', filename='js/i18n.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/assistant.js') }}" defer></script>
 </body>

@@ -260,3 +260,18 @@ def test_consultar_gemini_traduce_clave_invalida(monkeypatch, con_clave):
     monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
     with pytest.raises(gemini.GeminiError, match="no es válida"):
         gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+
+
+def test_asistente_responde_en_el_idioma_de_la_interfaz(client, creador_usuarios, iniciar_sesion, monkeypatch):
+    from mi_app import gemini
+
+    instrucciones = []
+    monkeypatch.setattr(gemini, "clave_configurada", lambda: True)
+    monkeypatch.setattr(gemini, "consultar_gemini", lambda texto, _mensajes: instrucciones.append(texto) or "ok")
+    creador_usuarios("empleado")
+    iniciar_sesion("empleado")
+
+    assert client.post("/api/asistente/", json={"pregunta": "Hi", "idioma": "en"}).status_code == 200
+    assert client.post("/api/asistente/", json={"pregunta": "Hola"}).status_code == 200
+    assert "Responde siempre en inglés" in instrucciones[0]
+    assert "Responde siempre en español" in instrucciones[1]

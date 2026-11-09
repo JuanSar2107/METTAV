@@ -351,3 +351,31 @@ html, body {
     .btn-login { height: 48px; font-size: 21px; }
     .login-footer { font-size: 13.5px; }
 }
+
+.language-toggle {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 2;
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.82);
+    color: #054a86;
+    font: 600 14px 'Barlow', sans-serif;
+    cursor: pointer;
+}
+
+.language-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}

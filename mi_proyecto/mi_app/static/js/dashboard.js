@@ -159,7 +159,7 @@
             : "";
 
         cards.forEach((card) => {
-            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.internalCode || ""} ${card.dataset.category || ""}`);
+            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.internalCode || ""} ${card.dataset.category || ""} ${card.dataset.translated || ""}`);
             const cardCategory = normalizeSearchText((card.dataset.category || "").trim());
 
             const matchesQuery = !query || content.includes(query);
@@ -610,7 +610,7 @@
         const words = normalizeSearchText(text.trim()).split(/\s+/).filter(Boolean);
         if (!words.length) return [];
         return inventoryCards.filter((card) => {
-            const content = normalizeSearchText(`${card.dataset.name} ${card.dataset.code} ${card.dataset.internalCode || ""}`);
+            const content = normalizeSearchText(`${card.dataset.name} ${card.dataset.code} ${card.dataset.internalCode || ""} ${card.dataset.translated || ""}`);
             return words.every((word) => content.includes(word));
         }).slice(0, limit);
     };
@@ -1073,7 +1073,7 @@
         dialog.querySelectorAll("[data-zf-field]").forEach((row) => {
             let value = card.dataset[row.dataset.zfField] || "";
             if (value && row.dataset.zfField === "fob") {
-                value = `USD ${Number(value).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                value = `USD ${Number(value).toLocaleString(window.METTAV_LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             }
             if (value && row.dataset.zfField === "groupName") {
                 value = `${card.dataset.group} · ${value}`;
@@ -1209,7 +1209,7 @@
     // "2026-05-08" -> "8 may 2026" (sin pasar por la zona horaria del navegador).
     const formatDate = (isoDate) => {
         const [year, month, day] = isoDate.split("-").map(Number);
-        return new Date(year, month - 1, day).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+        return new Date(year, month - 1, day).toLocaleDateString(window.METTAV_LOCALE, { day: "numeric", month: "short", year: "numeric" });
     };
 
     const movementOperationInput = document.querySelector("#movement-operation");
@@ -1228,7 +1228,7 @@
         const traceSummary = document.querySelector("#trace-summary");
         const traceMessage = document.querySelector("#trace-message");
         const traceList = document.querySelector("#trace-list");
-        const traceDateFormatter = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+        const traceDateFormatter = new Intl.DateTimeFormat(window.METTAV_LOCALE, { dateStyle: "medium", timeStyle: "short" });
 
         const traceEntry = (evento) => {
             const item = document.createElement("li");
@@ -1509,7 +1509,7 @@
             return;
         }
 
-        const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+        const dateFormatter = new Intl.DateTimeFormat(window.METTAV_LOCALE, {
             dateStyle: "medium",
             timeStyle: "short",
         });
@@ -1691,10 +1691,10 @@
     const reportTableWrap = document.querySelector("#report-table-wrap");
     const reportTableHead = document.querySelector("#report-table-head");
     const reportTableBody = document.querySelector("#report-table-body");
-    const reportDate = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeStyle: "short" });
+    const reportDate = new Intl.DateTimeFormat(window.METTAV_LOCALE, { dateStyle: "medium", timeStyle: "short" });
     const usd = (value) => (value === null || value === undefined
         ? ""
-        : `USD ${Number(value).toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        : `USD ${Number(value).toLocaleString(window.METTAV_LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
     // Columnas de cada reporte: [encabezado, función que saca el valor de la fila].
     const reportColumns = {

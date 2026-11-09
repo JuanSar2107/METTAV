@@ -268,7 +268,10 @@ def consultar_asistente():
     mensajes = _historial_valido(datos.get("historial"))
     mensajes.append({"rol": "usuario", "texto": pregunta.strip()})
     try:
-        respuesta = gemini.consultar_gemini(_instrucciones(usuario), mensajes)
+        instrucciones = _instrucciones(usuario)
+        if datos.get("idioma") == "en":
+            instrucciones = instrucciones.replace("Responde siempre en español", "Responde siempre en inglés", 1)
+        respuesta = gemini.consultar_gemini(instrucciones, mensajes)
     except gemini.GeminiError as error:
         current_app.logger.warning("Error del asistente Gemini: %s", error)
         return jsonify(error=str(error)), 502

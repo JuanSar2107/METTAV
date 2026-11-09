@@ -32,6 +32,8 @@
         bubble.className = `assistant-message assistant-message--${kind}`;
         // Por si el modelo usa Markdown igualmente, se quitan los asteriscos de negrita.
         bubble.textContent = kind === "bot" ? text.replace(/\*\*(.+?)\*\*/g, "$1") : text;
+        // Las preguntas y respuestas no pasan por el traductor de la interfaz.
+        if (kind !== "error") bubble.dataset.noTranslate = "1";
         messages.append(bubble);
         messages.scrollTop = messages.scrollHeight;
         return bubble;
@@ -77,12 +79,13 @@
         resizeInput();
         const pending = addMessage("Pensando...", "bot");
         pending.classList.add("is-pending");
+        delete pending.dataset.noTranslate;
 
         try {
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pregunta: question, historial: history }),
+                body: JSON.stringify({ pregunta: question, historial: history, idioma: window.METTAV_IDIOMA }),
             });
             const data = await response.json().catch(() => ({}));
             pending.remove();

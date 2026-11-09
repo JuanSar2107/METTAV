@@ -7,6 +7,7 @@ from mi_app.models.inventory import (
     Remision,
     RemisionLinea,
     SalidaIntegrada,
+    TraduccionTexto,
 )
 from mi_app.models.user import Usuario
 
@@ -19,6 +20,7 @@ __all__ = [
     "Remision",
     "RemisionLinea",
     "SalidaIntegrada",
+    "TraduccionTexto",
     "Usuario",
 ]
 
