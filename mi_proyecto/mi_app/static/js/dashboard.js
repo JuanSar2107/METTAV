@@ -1,6 +1,20 @@
 (() => {
     // Solo estos tipos se previsualizan: un SVG podría contener código.
     const TIPOS_IMAGEN_PREVIA = new Set(["image/jpeg", "image/png", "image/webp"]);
+    const LADO_MAXIMO_VISTA_PREVIA = 480;
+
+    // Decodifica la imagen y la vuelve a dibujar: lo que llega a la página son
+    // píxeles generados aquí, nunca el archivo que eligió el usuario.
+    const generarVistaPrevia = async (archivo) => {
+        const bitmap = await createImageBitmap(archivo);
+        const escala = Math.min(1, LADO_MAXIMO_VISTA_PREVIA / Math.max(bitmap.width, bitmap.height));
+        const lienzo = document.createElement("canvas");
+        lienzo.width = Math.max(1, Math.round(bitmap.width * escala));
+        lienzo.height = Math.max(1, Math.round(bitmap.height * escala));
+        lienzo.getContext("2d").drawImage(bitmap, 0, 0, lienzo.width, lienzo.height);
+        bitmap.close();
+        return lienzo.toDataURL("image/png");
+    };
     const logoutButton = document.querySelector("#logout-button");
     const searchInput = document.querySelector("#inventory-search");
     const categoryFilter = document.querySelector("#category-filter");
@@ -74,7 +88,7 @@
         const message = document.querySelector("#profile-message");
         const saveButton = document.querySelector("#profile-save-button");
         const originalImage = imagePreview.getAttribute("src") || "";
-        let previewUrl = null;
+        let turnoVistaPrevia = 0;
 
         profileTrigger.addEventListener("click", () => profileDialog.showModal());
         closeProfile.addEventListener("click", () => profileDialog.close());
@@ -84,12 +98,9 @@
             }
         });
 
-        imageInput.addEventListener("change", () => {
+        imageInput.addEventListener("change", async () => {
             const image = imageInput.files[0];
-            if (previewUrl) {
-                URL.revokeObjectURL(previewUrl);
-                previewUrl = null;
-            }
+            const turno = ++turnoVistaPrevia;
             message.hidden = true;
             if (!image) {
                 imagePreview.src = originalImage;
@@ -111,10 +122,20 @@
                 message.hidden = false;
                 return;
             }
-            previewUrl = URL.createObjectURL(image);
-            imagePreview.src = previewUrl;
-            imagePreview.hidden = false;
-            imageInitials.hidden = true;
+            try {
+                const vistaPrevia = await generarVistaPrevia(image);
+                // Si eligió otro archivo mientras tanto, esta vista ya no aplica.
+                if (turno !== turnoVistaPrevia) return;
+                imagePreview.src = vistaPrevia;
+                imagePreview.hidden = false;
+                imageInitials.hidden = true;
+            } catch {
+                if (turno !== turnoVistaPrevia) return;
+                imageInput.value = "";
+                message.textContent = "No se pudo leer la imagen. Elige otro archivo.";
+                message.dataset.state = "error";
+                message.hidden = false;
+            }
         });
 
         profileForm.addEventListener("submit", async (event) => {
@@ -229,7 +250,7 @@
         const label = document.querySelector(labelSelector);
         if (!(input instanceof HTMLInputElement) || !image || !label) return () => {};
         let baseText = label.textContent;
-        let objectUrl = null;
+        let turno = 0;
         let baseSrc = "";
 
         const show = (src, text) => {
@@ -237,9 +258,8 @@
             if (src) image.src = src;
             label.textContent = text;
         };
-        const render = () => {
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
-            objectUrl = null;
+        const render = async () => {
+            const turnoActual = ++turno;
             const file = input.files[0];
             if (!file) {
                 show(baseSrc, baseText);
@@ -247,8 +267,14 @@
                 input.value = "";
                 show(baseSrc, "El archivo supera el límite de 5 MB. Elige otro.");
             } else if (TIPOS_IMAGEN_PREVIA.has(file.type)) {
-                objectUrl = URL.createObjectURL(file);
-                show(objectUrl, `Vas a subir: ${file.name}`);
+                let vistaPrevia = "";
+                try {
+                    vistaPrevia = await generarVistaPrevia(file);
+                } catch {
+                    // Imagen dañada: se muestra solo el nombre; el servidor la rechazará.
+                }
+                // Si eligió otro archivo mientras tanto, esta vista ya no aplica.
+                if (turnoActual === turno) show(vistaPrevia, `Vas a subir: ${file.name}`);
             } else {
                 show("", `Vas a subir: ${file.name}`);
             }
