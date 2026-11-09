@@ -534,9 +534,9 @@
         [/^Eliminar (.+)$/, (_m, name) => `Delete ${t(name)}`],
         [/^1 (unidades|unidad)$/, "1 unit"],
         [/^(\d+) (unidades|unidad)$/, "$1 units"],
-        [/^(\d+) categorías?$/, "$1 categories"],
-        [/^(\d+) artículos?$/, "$1 items"],
-        [/^(\d+) usuarios?$/, "$1 users"],
+        [/^(\d+) categorías?$/, (_m, n) => `${n} ${n === "1" ? "category" : "categories"}`],
+        [/^(\d+) artículos?$/, (_m, n) => `${n} ${n === "1" ? "item" : "items"}`],
+        [/^(\d+) usuarios?$/, (_m, n) => `${n} ${n === "1" ? "user" : "users"}`],
         [/^(.+) disponibles$/, (_m, unit) => `${t(unit)} available`],
         [/^(.+) · existencia actual: (\S+) (.+)$/, (_m, code, stock, unit) => `${code} · current stock: ${stock} ${t(unit)}`],
         [/^(Ingreso|Retiro) de (\d+) (.+?)( \(ANULADO\))?$/, (_m, type, qty, unit, voided) => `${t(type)} of ${qty} ${t(unit)}${voided ? " (VOIDED)" : ""}`],
@@ -632,19 +632,29 @@
 
     const ATTRIBUTES = ["placeholder", "title", "aria-label", "alt"];
     const SKIP = "script, style, textarea, [data-no-translate]";
+    const textStates = new WeakMap();
+    const attributeStates = new WeakMap();
 
     const translateTextNode = (node) => {
         if (node.parentElement?.closest(SKIP)) return;
-        const translated = translate(node.data);
-        if (translated !== node.data) node.data = translated;
+        // Se traduce siempre desde el texto original: los datos pueden llegar después.
+        const state = textStates.get(node);
+        const source = state && state.output === node.data ? state.source : node.data;
+        const output = translate(source);
+        textStates.set(node, { source, output });
+        if (output !== node.data) node.data = output;
     };
     const translateAttributes = (element) => {
         if (element.closest("[data-no-translate]")) return;
         ATTRIBUTES.forEach((name) => {
             const value = element.getAttribute(name);
             if (!value) return;
-            const translated = translate(value);
-            if (translated !== value) element.setAttribute(name, translated);
+            const states = attributeStates.get(element) || {};
+            const source = states[name]?.output === value ? states[name].source : value;
+            const output = translate(source);
+            states[name] = { source, output };
+            attributeStates.set(element, states);
+            if (output !== value) element.setAttribute(name, output);
         });
     };
     const translateTree = (root) => {
