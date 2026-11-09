@@ -43,3 +43,6 @@ build/
 .coverage
 htmlcov/
 .mypy_cache/
+
+# Configuración local del editor
+.claude/
