@@ -2091,6 +2091,38 @@ body {
     cursor: wait;
 }
 
+.security-section {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(128, 128, 128, 0.35);
+}
+
+.security-title {
+    margin: 0 0 12px;
+}
+
+.security-subtitle {
+    margin: 18px 0 8px;
+    font-weight: 700;
+}
+
+.security-note {
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+
+.security-secret {
+    display: inline-block;
+    padding: 8px 12px;
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
+    word-break: break-all;
+    user-select: all;
+    background: rgba(128, 128, 128, 0.15);
+    border-radius: 6px;
+}
+
 @media (max-width: 640px) {
     .account-controls {
         gap: 7px;
