@@ -265,6 +265,27 @@ html, body {
     line-height: 1.4;
 }
 
+.form-message[data-state="success"] {
+    background: #e8f6ec;
+    color: #1d6b34;
+}
+
+a.btn-login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.forgot-link {
+    display: block;
+    margin-top: 14px;
+    text-align: center;
+    color: var(--blue);
+    font-size: 15px;
+    text-decoration: underline;
+}
+
 .form-message[data-state="error"] {
     background: #fff0ef;
     color: #9b2525;

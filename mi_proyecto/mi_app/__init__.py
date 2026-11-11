@@ -117,6 +117,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .routes.reports import reportes_bp
     from .routes.remissions import remisiones_bp
     from .routes.translations import traducciones_bp
+    from .routes.recovery import recuperacion_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(inventario_bp)
@@ -124,6 +125,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(remisiones_bp)
     app.register_blueprint(traducciones_bp)
     app.register_blueprint(usuarios_bp)
+    app.register_blueprint(recuperacion_bp)
     app.register_blueprint(asistente_bp)
 
     with app.app_context():

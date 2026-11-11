@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Elegir contraseña nueva | METTAV Group SAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+<main class="login-page">
+    <div class="bg-overlay"></div>
+    <section class="login-card" aria-labelledby="brand-heading">
+        <header class="brand">
+            <img class="brand__logo" src="{{ url_for('static', filename='images/mettav-logo.png') }}" alt="METTAV Logo">
+            <h1 id="brand-heading" class="brand__name">METTAV</h1>
+            <p class="brand__sub">Contraseña nueva</p>
+        </header>
+
+        {% if valido %}
+        <form
+            class="login-form"
+            id="reset-form"
+            data-url="{{ url_for('recuperacion.restablecer_contrasena') }}"
+            data-login-url="{{ url_for('main.login') }}"
+            data-token="{{ token }}"
+        >
+            <p class="form-message" data-state="info">
+                Elige una contraseña de 12 o más caracteres que mezcle letras con números o símbolos y que no sea una palabra común.
+            </p>
+            <div class="field-group">
+                <label class="field-label" for="new-password"><span>Contraseña nueva</span></label>
+                <div class="input-wrap">
+                    <input id="new-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="repeat-password"><span>Repite la contraseña</span></label>
+                <div class="input-wrap">
+                    <input id="repeat-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                </div>
+            </div>
+            {% if pide_codigo %}
+            <div class="field-group">
+                <label class="field-label" for="otp"><span>Código de verificación de tu aplicación</span></label>
+                <div class="input-wrap">
+                    <input id="otp" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code" required>
+                </div>
+            </div>
+            {% endif %}
+            <p class="form-message" id="form-message" role="status" aria-live="polite" hidden></p>
+            <button class="btn-login" id="submit-button" type="submit">GUARDAR CONTRASEÑA</button>
+        </form>
+        {% else %}
+        <div class="login-form">
+            <p class="form-message" data-state="error">
+                Este enlace no es válido o ya venció. Pide uno nuevo.
+            </p>
+            <a class="btn-login" href="{{ url_for('recuperacion.pagina_recuperar') }}">PEDIR OTRO ENLACE</a>
+        </div>
+        {% endif %}
+    </section>
+</main>
+<script src="{{ url_for('static', filename='js/csrf.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/restablecer.js') }}" defer></script>
+</body>
+</html>

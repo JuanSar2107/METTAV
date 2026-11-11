@@ -40,6 +40,14 @@ services:
       DATABASE_URL: ${DATABASE_URL:-}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Recuperación de contraseña por correo (APP_URL = dirección pública con https://).
+      APP_URL: ${APP_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SEGURIDAD: ${SMTP_SEGURIDAD:-starttls}
       GEMINI_API_KEY: ${GEMINI_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
     # Coolify expone el servicio a través de su propio proxy (dominio + HTTPS),

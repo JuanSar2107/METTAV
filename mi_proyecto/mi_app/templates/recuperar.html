@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recuperar contraseña | METTAV Group SAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+<main class="login-page">
+    <div class="bg-overlay"></div>
+    <section class="login-card" aria-labelledby="brand-heading">
+        <header class="brand">
+            <img class="brand__logo" src="{{ url_for('static', filename='images/mettav-logo.png') }}" alt="METTAV Logo">
+            <h1 id="brand-heading" class="brand__name">METTAV</h1>
+            <p class="brand__sub">Recuperar contraseña</p>
+        </header>
+
+        <form class="login-form" id="recover-form" data-url="{{ url_for('recuperacion.solicitar_recuperacion') }}">
+            <p class="form-message" data-state="info">
+                Escribe tu usuario o el correo registrado en tu perfil. Te enviaremos un enlace para elegir una contraseña nueva.
+            </p>
+            <div class="field-group">
+                <label class="field-label" for="identifier"><span>Usuario o correo</span></label>
+                <div class="input-wrap">
+                    <input id="identifier" type="text" maxlength="254" autocomplete="username" required>
+                </div>
+            </div>
+            <p class="form-message" id="form-message" role="status" aria-live="polite" hidden></p>
+            <button class="btn-login" id="submit-button" type="submit">ENVIAR ENLACE</button>
+            <a class="forgot-link" href="{{ url_for('main.login') }}">Volver al inicio de sesión</a>
+        </form>
+    </section>
+</main>
+<script src="{{ url_for('static', filename='js/csrf.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/recuperar.js') }}" defer></script>
+</body>
+</html>

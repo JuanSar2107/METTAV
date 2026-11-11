@@ -9,7 +9,7 @@ from mi_app.models.inventory import (
     SalidaIntegrada,
     TraduccionTexto,
 )
-from mi_app.models.user import EventoLimite, RegistroAcceso, SesionToken, Usuario
+from mi_app.models.user import EventoLimite, RegistroAcceso, SesionToken, TokenRecuperacion, Usuario
 
 __all__ = [
     "ArticuloInventario",
@@ -24,6 +24,7 @@ __all__ = [
     "EventoLimite",
     "RegistroAcceso",
     "SesionToken",
+    "TokenRecuperacion",
     "Usuario",
 ]
 

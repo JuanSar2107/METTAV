@@ -85,6 +85,19 @@ class RegistroAcceso(db.Model):
     detalle = db.Column(db.String(200), nullable=True)
 
 
+class TokenRecuperacion(db.Model):
+    """Enlace de un solo uso para restablecer la contraseña. Solo se guarda su hash."""
+
+    __tablename__ = "tokens_recuperacion"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(db.Integer, nullable=False, index=True)
+    hash_token = db.Column(db.String(64), unique=True, nullable=False)
+    creado = db.Column(db.BigInteger, nullable=False)
+    expira = db.Column(db.BigInteger, nullable=False)
+    usado = db.Column(db.Boolean, nullable=False, default=False)
+
+
 class EventoLimite(db.Model):
     """Intentos contados por el limitador; en la BD para sobrevivir reinicios."""
 
