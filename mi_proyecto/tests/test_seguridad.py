@@ -426,3 +426,56 @@ def test_bitacora_registra_accesos_y_solo_la_ve_un_admin(client, creador_usuario
     assert ("login", "ana") in eventos
     solo_fallos = client.get("/api/accesos?solo_fallos=1").get_json()["accesos"]
     assert solo_fallos and all(not a["exito"] for a in solo_fallos)
+
+
+# ------------------------------------------------- cookies de sesión, cambio forzado, TOTP cifrado
+
+def test_cookies_son_de_sesion_del_navegador(creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    for cookie in iniciar_sesion("ana").headers.getlist("Set-Cookie"):
+        assert "Max-Age" not in cookie and "Expires" not in cookie  # se borran al cerrar el navegador
+
+
+def test_logout_borra_las_cookies(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    borradas = client.post("/api/logout").headers.getlist("Set-Cookie")
+    assert len(borradas) == 3 and all("Max-Age=0" in c or "1970" in c for c in borradas)
+    assert client.get("/dashboard").status_code == 302  # de vuelta al login
+
+
+def test_usuario_creado_por_el_admin_debe_cambiar_la_contrasena(app, client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("jefe", es_admin=True)
+    iniciar_sesion("jefe")
+    client.post("/api/usuarios", json={"usuario": "laura", "contrasena": "clave-inicial-123"})
+    client.post("/api/logout")
+
+    assert client.post("/api/login", json={"usuario": "laura", "contrasena": "clave-inicial-123"}).status_code == 200
+    # Con el cambio pendiente solo se puede cambiar la contraseña o salir.
+    bloqueado = client.get("/api/inventario/categorias")
+    assert bloqueado.status_code == 403 and bloqueado.get_json()["cambiar_contrasena"] is True
+    assert "Cambiar" in client.get("/dashboard").get_data(as_text=True) or "contraseña" in client.get("/dashboard").get_data(as_text=True)
+    assert client.get("/api/usuarios/me").status_code == 200
+
+    cambio = client.put("/api/usuarios/me", json={"contrasena": "mi-clave-propia-456", "contrasena_actual": "clave-inicial-123"})
+    assert cambio.status_code == 200
+    assert client.get("/api/inventario/categorias").status_code == 200
+
+
+def test_secreto_totp_se_guarda_cifrado(app, client, creador_usuarios, iniciar_sesion):
+    from mi_app.models import Usuario
+
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    secreto = client.post("/api/usuarios/me/2fa/iniciar", json={"contrasena": "clave123"}).get_json()["secreto"]
+    with app.app_context():
+        guardado = Usuario.query.filter_by(usuario="ana").first().totp_secreto
+        assert guardado.startswith("enc:") and secreto not in guardado
+        assert totp.revelar(guardado, app.secret_key) == secreto
+        assert totp.revelar(guardado, "otra-clave") is None
+
+
+def test_docs_es_solo_para_administradores(client, creador_usuarios, iniciar_sesion):
+    creador_usuarios("ana")
+    iniciar_sesion("ana")
+    assert client.get("/docs").status_code == 403
