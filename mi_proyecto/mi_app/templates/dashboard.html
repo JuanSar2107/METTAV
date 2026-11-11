@@ -965,6 +965,85 @@
                 <button class="withdraw-button" id="profile-save-button" type="submit">Guardar perfil</button>
             </div>
         </form>
+
+        <section
+            class="security-section"
+            id="security-section"
+            data-password-url="{{ url_for('usuarios.actualizar_usuario_actual') }}"
+            data-2fa-start-url="{{ url_for('usuarios.iniciar_2fa') }}"
+            data-2fa-activate-url="{{ url_for('usuarios.activar_2fa') }}"
+            data-2fa-deactivate-url="{{ url_for('usuarios.desactivar_2fa') }}"
+            data-2fa-active="{{ 'true' if usuario.totp_activo else 'false' }}"
+        >
+            <h3 class="security-title">Seguridad</h3>
+
+            <form id="password-form" class="security-form">
+                <p class="security-subtitle">Cambiar contraseña</p>
+                <div class="profile-form-grid">
+                    <label class="profile-field" for="security-current-password">
+                        <span>Contraseña actual</span>
+                        <input id="security-current-password" type="password" maxlength="256" autocomplete="current-password" required>
+                    </label>
+                    <label class="profile-field" for="security-new-password">
+                        <span>Contraseña nueva (12+ caracteres)</span>
+                        <input id="security-new-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                    </label>
+                </div>
+                <p class="dialog-message" id="password-message" role="status" aria-live="polite" hidden></p>
+                <div class="profile-form-actions">
+                    <button class="withdraw-button" type="submit">Cambiar contraseña</button>
+                </div>
+            </form>
+
+            <div class="security-form" id="twofa-box">
+                <p class="security-subtitle">Verificación en dos pasos</p>
+                <p class="security-note" id="twofa-status"></p>
+
+                <form id="twofa-start-form" hidden>
+                    <label class="profile-field" for="twofa-start-password">
+                        <span>Confirma tu contraseña</span>
+                        <input id="twofa-start-password" type="password" maxlength="256" autocomplete="current-password" required>
+                    </label>
+                    <div class="profile-form-actions">
+                        <button class="withdraw-button" type="submit">Activar</button>
+                    </div>
+                </form>
+
+                <form id="twofa-activate-form" hidden>
+                    <p class="security-note">
+                        Escribe esta clave en tu aplicación autenticadora (Google Authenticator, Microsoft Authenticator, Authy)
+                        como cuenta «por tiempo», o ábrela con el enlace si estás en el celular:
+                    </p>
+                    <p><code id="twofa-secret" class="security-secret"></code></p>
+                    <p><a id="twofa-uri" href="#">Abrir en la aplicación autenticadora</a></p>
+                    <label class="profile-field" for="twofa-activate-code">
+                        <span>Código de 6 dígitos que muestra la aplicación</span>
+                        <input id="twofa-activate-code" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code" required>
+                    </label>
+                    <div class="profile-form-actions">
+                        <button class="withdraw-button" type="submit">Confirmar y activar</button>
+                    </div>
+                </form>
+
+                <form id="twofa-deactivate-form" hidden>
+                    <div class="profile-form-grid">
+                        <label class="profile-field" for="twofa-deactivate-password">
+                            <span>Contraseña</span>
+                            <input id="twofa-deactivate-password" type="password" maxlength="256" autocomplete="current-password" required>
+                        </label>
+                        <label class="profile-field" for="twofa-deactivate-code">
+                            <span>Código actual</span>
+                            <input id="twofa-deactivate-code" type="text" inputmode="numeric" pattern="[0-9 ]*" maxlength="8" autocomplete="one-time-code" required>
+                        </label>
+                    </div>
+                    <div class="profile-form-actions">
+                        <button class="withdraw-button" type="submit">Desactivar</button>
+                    </div>
+                </form>
+
+                <p class="dialog-message" id="twofa-message" role="status" aria-live="polite" hidden></p>
+            </div>
+        </section>
     </div>
 </dialog>
 
@@ -986,7 +1065,7 @@
                 </label>
                 <label class="admin-field admin-field--full" for="new-user-password">
                     <span>Contraseña</span>
-                    <input id="new-user-password" name="contrasena" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
+                    <input id="new-user-password" name="contrasena" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
                 </label>
                 <label class="admin-field admin-field--full" for="new-user-role">
                     <span>Perfil</span>
@@ -1462,6 +1541,7 @@
 <script src="{{ url_for('static', filename='js/csrf.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/i18n.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/seguridad.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/assistant.js') }}" defer></script>
 </body>
 </html>

@@ -51,6 +51,7 @@
         logoutButton.addEventListener("click", async () => {
             logoutButton.disabled = true;
             try {
+                try { sessionStorage.removeItem("mettav_pestana"); } catch { /* sin almacenamiento */ }
                 await fetch("/api/logout", { method: "POST" });
             } finally {
                 window.location.assign("/");

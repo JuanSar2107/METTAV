@@ -65,6 +65,11 @@
                 return;
             }
 
+            try {
+                sessionStorage.setItem("mettav_pestana", "1"); // el panel solo vive en esta pestaña
+            } catch {
+                /* sin almacenamiento: el panel no podrá comprobarlo y no bloqueará */
+            }
             window.location.assign(form.dataset.dashboardUrl);
         } catch {
             message.dataset.state = "error";
