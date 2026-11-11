@@ -285,4 +285,8 @@ def test_docs_requiere_sesion(client, creador_usuarios, iniciar_sesion):
     assert client.get("/docs").status_code == 401
     creador_usuarios("empleado")
     iniciar_sesion("empleado")
+    assert client.get("/docs").status_code == 403  # solo administradores
+    client.post("/api/logout")
+    creador_usuarios("jefe", es_admin=True)
+    iniciar_sesion("jefe")
     assert client.get("/docs").status_code == 200

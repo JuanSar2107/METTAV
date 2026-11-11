@@ -34,8 +34,8 @@ def test_dashboard_con_sesion_siembra_inventario(client, app, creador_usuarios, 
 
 
 def test_docs_devuelve_rutas(client, creador_usuarios, iniciar_sesion):
-    creador_usuarios("empleado")
-    iniciar_sesion("empleado")
+    creador_usuarios("jefe", es_admin=True)
+    iniciar_sesion("jefe")
     respuesta = client.get("/docs")
     assert respuesta.status_code == 200
     datos = respuesta.get_json()

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -44,6 +44,7 @@ def _respuesta_usuario(usuario: Usuario):
         "usuario": usuario.usuario,
         "es_admin": usuario.es_admin,
         "rol": usuario.rol_clave,
+        "totp_activo": bool(usuario.totp_activo),
         "nombre_completo": usuario.nombre_completo or "",
         "correo": usuario.correo or "",
         "numero_identidad": usuario.numero_identidad or "",
@@ -55,6 +56,10 @@ def _respuesta_usuario(usuario: Usuario):
 
 def _usuario_actual() -> Usuario | None:
     return usuario_actual()
+
+
+def _secreto_totp(usuario: Usuario) -> str:
+    return totp.revelar(usuario.totp_secreto, current_app.secret_key) or ""
 
 
 def _validar_contrasena_nueva(contrasena, nombre: str | None = None) -> str | None:
@@ -89,7 +94,8 @@ def registrar_usuario():
     if rol not in ("empleado", "auxiliar"):
         return jsonify(error="El rol debe ser empleado o auxiliar de inventarios."), 400
 
-    usuario = Usuario(usuario=nombre, es_admin=False, es_auxiliar=rol == "auxiliar")
+    # La contraseña la eligió el administrador: la persona debe cambiarla al entrar.
+    usuario = Usuario(usuario=nombre, es_admin=False, es_auxiliar=rol == "auxiliar", cambio_requerido=True)
     usuario.establecer_contrasena(contrasena)
     db.session.add(usuario)
     try:
@@ -188,7 +194,7 @@ def iniciar_sesion():
         )
         if espera:
             return respuesta_limite(espera, "Demasiados intentos fallidos.")
-        paso = totp.verificar(usuario.totp_secreto or "", codigo, usuario.totp_ultimo_paso)
+        paso = totp.verificar(_secreto_totp(usuario), codigo, usuario.totp_ultimo_paso)
         if paso is None:
             for clave in (clave_2fa, clave_usuario, clave_ip):
                 limitador().registrar(clave)
@@ -307,6 +313,7 @@ def actualizar_usuario_actual():
         if usuario.verificar_contrasena(datos["contrasena"]):
             return jsonify(error="La contraseña nueva debe ser distinta de la actual."), 400
         usuario.establecer_contrasena(datos["contrasena"])
+        usuario.cambio_requerido = False
 
     try:
         db.session.commit()
@@ -356,10 +363,11 @@ def iniciar_2fa():
         return jsonify(error="Confirma tu contraseña en 'contrasena'."), 403
     if usuario.totp_activo:
         return jsonify(error="La verificación en dos pasos ya está activa."), 409
-    usuario.totp_secreto = totp.generar_secreto()
+    secreto = totp.generar_secreto()
+    usuario.totp_secreto = totp.proteger(secreto, current_app.secret_key)
     usuario.totp_ultimo_paso = None
     db.session.commit()
-    return jsonify(secreto=usuario.totp_secreto, uri=totp.uri_aprovisionamiento(usuario.totp_secreto, usuario.usuario))
+    return jsonify(secreto=secreto, uri=totp.uri_aprovisionamiento(secreto, usuario.usuario))
 
 
 @usuarios_bp.post("/usuarios/me/2fa/activar")
@@ -371,7 +379,7 @@ def activar_2fa():
     datos = _leer_datos_json() or {}
     if usuario.totp_activo or not usuario.totp_secreto:
         return jsonify(error="Primero inicia la configuración de la verificación en dos pasos."), 409
-    paso = totp.verificar(usuario.totp_secreto, datos.get("codigo"))
+    paso = totp.verificar(_secreto_totp(usuario), datos.get("codigo"))
     if paso is None:
         return jsonify(error="Código de verificación incorrecto."), 400
     usuario.totp_activo = True
@@ -393,7 +401,7 @@ def desactivar_2fa():
         return jsonify(error="Confirma tu contraseña en 'contrasena'."), 403
     if not usuario.totp_activo:
         return jsonify(error="La verificación en dos pasos no está activa."), 409
-    if totp.verificar(usuario.totp_secreto or "", datos.get("codigo"), usuario.totp_ultimo_paso) is None:
+    if totp.verificar(_secreto_totp(usuario), datos.get("codigo"), usuario.totp_ultimo_paso) is None:
         return jsonify(error="Código de verificación incorrecto."), 400
     usuario.totp_activo = False
     usuario.totp_secreto = None

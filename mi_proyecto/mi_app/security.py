@@ -275,9 +275,11 @@ def _aplicar_cookies(respuesta) -> None:
             respuesta.delete_cookie(nombre, path="/", secure=seguro, samesite="Lax",
                                     httponly=nombre != COOKIE_CSRF)
         return
-    for nombre, (valor, duracion) in (getattr(g, "_mettav_cookies", None) or {}).items():
+    for nombre, (valor, _duracion) in (getattr(g, "_mettav_cookies", None) or {}).items():
+        # Sin Max-Age: son cookies de sesión del navegador y desaparecen al cerrarlo.
+        # La vigencia real la fijan el `exp` de cada JWT y la fila en la BD.
         respuesta.set_cookie(
-            nombre, valor, max_age=duracion, path="/", secure=seguro, samesite="Lax",
+            nombre, valor, path="/", secure=seguro, samesite="Lax",
             # El token CSRF lo lee el JavaScript de la página para enviarlo en la cabecera.
             httponly=nombre != COOKIE_CSRF,
         )
@@ -485,6 +487,23 @@ def _token_csrf_valido() -> bool:
     return hmac.compare_digest(enviado, _csrf(g._mettav_sid).encode("ascii"))
 
 
+# Mientras `cambio_requerido` sea True solo se permite cambiar la contraseña o salir.
+_PERMITIDOS_CON_CAMBIO_PENDIENTE = {
+    None, "static", "main.login", "main.dashboard",
+    "usuarios.iniciar_sesion", "usuarios.cerrar_sesion",
+    "usuarios.obtener_usuario_actual", "usuarios.actualizar_usuario_actual",
+}
+
+
+def _cambio_de_contrasena_pendiente() -> bool:
+    if request.endpoint in _PERMITIDOS_CON_CAMBIO_PENDIENTE:
+        return False
+    if not (request.cookies.get(COOKIE_ACCESO) or request.cookies.get(COOKIE_REFRESCO)):
+        return False
+    usuario = usuario_actual()
+    return usuario is not None and bool(usuario.cambio_requerido)
+
+
 def configurar_seguridad(app: Flask) -> None:
     app.config.setdefault("COOKIE_SECURE", os.environ.get("COOKIE_SECURE") == "1")
     app.config.setdefault("JWT_ACCESO_SEGUNDOS", _entorno_entero("JWT_ACCESO_MINUTOS", 15) * 60)
@@ -513,6 +532,8 @@ def configurar_seguridad(app: Flask) -> None:
                 return jsonify(error="Petición rechazada: origen no permitido."), 403
             if not _token_csrf_valido():
                 return jsonify(error="Petición rechazada: falta el token CSRF."), 403
+        if _cambio_de_contrasena_pendiente():
+            return jsonify(error="Debes cambiar tu contraseña antes de continuar.", cambiar_contrasena=True), 403
         return None
 
     @app.after_request
@@ -524,6 +545,8 @@ def configurar_seguridad(app: Flask) -> None:
         cabeceras.setdefault("X-Frame-Options", "DENY")
         cabeceras.setdefault("Referrer-Policy", "same-origin")
         cabeceras.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        cabeceras.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        cabeceras.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         if request.is_secure or app.config["COOKIE_SECURE"]:
             cabeceras.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         if request.path.startswith("/api/") or request.path == "/dashboard":

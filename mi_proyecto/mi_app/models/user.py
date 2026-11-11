@@ -19,9 +19,11 @@ class Usuario(db.Model):
     direccion = db.Column(db.String(255), nullable=True)
     imagen_perfil = db.Column(db.String(500), nullable=True)
     # Verificación en dos pasos (TOTP). Solo exige código si totp_activo es True.
-    totp_secreto = db.Column(db.String(64), nullable=True)
+    totp_secreto = db.Column(db.String(255), nullable=True)  # cifrado (ver totp.proteger)
     totp_activo = db.Column(db.Boolean, nullable=False, default=False)
     totp_ultimo_paso = db.Column(db.BigInteger, nullable=True)
+    # True hasta que el usuario cambie la contraseña que le dieron (o que es anterior a la política).
+    cambio_requerido = db.Column(db.Boolean, nullable=False, default=False)
 
     @property
     def puede_operar(self) -> bool:

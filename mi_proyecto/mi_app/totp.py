@@ -12,8 +12,34 @@ import struct
 import time
 from urllib.parse import quote
 
+from cryptography.fernet import Fernet, InvalidToken
+
 PASO_SEGUNDOS = 30
 DIGITOS = 6
+
+
+_PREFIJO = "enc:"
+
+
+def _fernet(clave_app: str) -> Fernet:
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(b"mettav-totp-v1|" + clave_app.encode("utf-8")).digest()))
+
+
+def proteger(secreto: str, clave_app: str) -> str:
+    """Cifra el secreto antes de guardarlo en la base de datos."""
+    return _PREFIJO + _fernet(clave_app).encrypt(secreto.encode("ascii")).decode("ascii")
+
+
+def revelar(guardado: str | None, clave_app: str) -> str | None:
+    """Descifra el secreto guardado. Devuelve None si no hay o no se puede descifrar."""
+    if not guardado:
+        return None
+    if not guardado.startswith(_PREFIJO):
+        return guardado  # guardado sin cifrar por una versión anterior
+    try:
+        return _fernet(clave_app).decrypt(guardado[len(_PREFIJO):].encode("ascii")).decode("ascii")
+    except InvalidToken:
+        return None
 
 
 def generar_secreto() -> str:

@@ -13,7 +13,7 @@ main_bp = Blueprint('main', __name__)
 _DESCRIPCIONES_RUTAS = {
     "main.login": "Muestra la pantalla de inicio de sesión.",
     "main.dashboard": "Muestra el inventario del usuario autenticado.",
-    "main.docs": "Devuelve la documentación JSON de todas las rutas registradas.",
+    "main.docs": "Devuelve la documentación JSON de todas las rutas registradas; requiere sesión de administrador.",
     "usuarios.registrar_usuario": "Crea una cuenta de usuario normal; requiere sesión de administrador.",
     "usuarios.listar_usuarios": "Devuelve la lista de usuarios y empleados registrados; con ?formato=xlsx o pdf la descarga con los filtros q y rol; requiere sesión de administrador.",
     "usuarios.iniciar_sesion": "Valida las credenciales y crea la sesión del usuario.",
@@ -145,6 +145,8 @@ def dashboard():
     if usuario is None:
         cerrar_sesion_actual()
         return redirect(url_for('main.login'))
+    if usuario.cambio_requerido:
+        return render_template('cambiar_contrasena.html', usuario=usuario)
     articulos = _inventario_inicial()
     categorias = Categoria.query.order_by(Categoria.nombre.asc()).all()
     usuarios_registrados = (
@@ -183,9 +185,12 @@ def manual_usuario():
 
 @main_bp.get('/docs')
 def docs():
-    """Describe en JSON todas las rutas activas de Flask (solo con sesión iniciada)."""
-    if usuario_actual() is None:
+    """Describe en JSON todas las rutas activas de Flask (solo administradores)."""
+    usuario = usuario_actual()
+    if usuario is None:
         return jsonify(error="Debes iniciar sesión."), 401
+    if not usuario.es_admin:
+        return jsonify(error="Solo un administrador puede ver la documentación de rutas."), 403
     rutas = []
     for regla in current_app.url_map.iter_rules():
         vista = current_app.view_functions[regla.endpoint]

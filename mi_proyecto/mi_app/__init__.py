@@ -138,7 +138,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             "telefono": "VARCHAR(32)",
             "direccion": "VARCHAR(255)",
             "imagen_perfil": "VARCHAR(500)",
-            "totp_secreto": "VARCHAR(64)",
+            "totp_secreto": "VARCHAR(255)",
+            "cambio_requerido": "BOOLEAN NOT NULL DEFAULT FALSE",
             "totp_activo": "BOOLEAN NOT NULL DEFAULT FALSE",
             "totp_ultimo_paso": "BIGINT",
         }
@@ -153,6 +154,10 @@ def create_app(test_config: dict | None = None) -> Flask:
                     connection.execute(
                         text(f"ALTER TABLE usuarios ADD COLUMN {column_name} {column_type}")
                     )
+                if "cambio_requerido" in missing_columns:
+                    # Las cuentas existentes son anteriores a la política de contraseñas:
+                    # deben renovarla en su próximo ingreso.
+                    connection.execute(text("UPDATE usuarios SET cambio_requerido = TRUE"))
 
         movement_columns = {
             column["name"]
