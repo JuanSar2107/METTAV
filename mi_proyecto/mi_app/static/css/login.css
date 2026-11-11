@@ -233,31 +233,6 @@ html, body {
     display: none;
 }
 
-/* ── Opciones ────────────────────────────────────────── */
-.form-options {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 15px;
-}
-
-.remember-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    user-select: none;
-}
-
-.remember-label input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    accent-color: var(--blue);
-    cursor: pointer;
-}
-
 .link-subtle {
     color: var(--link);
     text-decoration: underline;
@@ -347,7 +322,6 @@ html, body {
     .brand__logo { width: 120px; }
     .brand__name { font-size: 38px; }
     .brand__sub  { font-size: 16px; }
-    .form-options { flex-wrap: wrap; gap: 8px; }
     .btn-login { height: 48px; font-size: 21px; }
     .login-footer { font-size: 13.5px; }
 }
@@ -378,4 +352,9 @@ html, body {
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 1.8;
+}
+
+/* El campo del código solo aparece cuando la cuenta tiene verificación en dos pasos. */
+.field-group[hidden] {
+    display: none;
 }

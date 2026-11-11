@@ -412,7 +412,6 @@
         "Reactivar": "Reactivate",
         "Reactivar artículo": "Reactivate item",
         "Recibido": "Received",
-        "Recordar Usuario": "Remember me",
         "Referencia": "Reference",
         "Referencia del equipo": "Equipment reference",
         "Registrada": "Recorded",
