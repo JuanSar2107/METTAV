@@ -292,6 +292,11 @@ html, body {
     transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
 }
 
+.btn-login--secondary {
+    margin-top: 10px;
+    opacity: 0.75;
+}
+
 .btn-login:hover {
     background: var(--blue-dark);
     box-shadow: 0 6px 20px rgba(0, 96, 170, 0.48);
