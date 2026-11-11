@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cambiar contraseña | METTAV Group SAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+<main class="login-page">
+    <div class="bg-overlay"></div>
+    <section class="login-card" aria-labelledby="brand-heading">
+        <header class="brand">
+            <img class="brand__logo" src="{{ url_for('static', filename='images/mettav-logo.png') }}" alt="METTAV Logo">
+            <h1 id="brand-heading" class="brand__name">METTAV</h1>
+            <p class="brand__sub">Hola, {{ usuario.nombre_completo or usuario.usuario }}</p>
+        </header>
+
+        <form
+            class="login-form"
+            id="change-form"
+            data-url="{{ url_for('usuarios.actualizar_usuario_actual') }}"
+            data-dashboard-url="{{ url_for('main.dashboard') }}"
+            data-logout-url="{{ url_for('usuarios.cerrar_sesion') }}"
+        >
+            <p class="form-message" data-state="error">
+                Por seguridad debes crear una contraseña nueva antes de continuar.
+                Usa 12 o más caracteres, mezcla letras con números o símbolos y evita palabras comunes.
+            </p>
+            <div class="field-group">
+                <label class="field-label" for="current-password"><span>Contraseña actual</span></label>
+                <div class="input-wrap">
+                    <input id="current-password" type="password" maxlength="256" autocomplete="current-password" required>
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label" for="new-password"><span>Contraseña nueva</span></label>
+                <div class="input-wrap">
+                    <input id="new-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                </div>
+            </div>
+            <p class="form-message" id="form-message" role="status" aria-live="polite" hidden></p>
+            <button class="btn-login" id="submit-button" type="submit">GUARDAR CONTRASEÑA</button>
+            <button class="btn-login" id="logout-button" type="button" style="margin-top:10px;opacity:.75">SALIR</button>
+        </form>
+    </section>
+</main>
+<script src="{{ url_for('static', filename='js/csrf.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/cambiar-contrasena.js') }}" defer></script>
+</body>
+</html>
