@@ -18,7 +18,6 @@
 import hashlib
 import hmac
 import os
-import re
 import secrets
 import time
 from datetime import datetime, timezone
@@ -39,18 +38,16 @@ _CLAVES_INSEGURAS = {
     "cambia-esta-clave-en-produccion",
     "genera-aqui-una-clave-larga-y-aleatoria",
 }
-_CONTRASENAS_DE_EJEMPLO = {"cambia-esta-clave"}
+_CONTRASENAS_DE_EJEMPLO = {
+    "cambia-esta-clave", "12345678", "123456789", "1234567890", "87654321", "11111111",
+    "00000000", "123123123", "12341234", "1q2w3e4r", "qwerty123",
+}
 _METODOS_QUE_MODIFICAN = {"POST", "PUT", "PATCH", "DELETE"}
 
-MIN_LARGO_CONTRASENA = 12
+MIN_LARGO_CONTRASENA = 1
 MAX_LARGO_CONTRASENA = 256
-# Contraseñas típicas (se comparan solo las letras, sin números ni símbolos).
-_CONTRASENAS_COMUNES = {
-    "password", "contrasena", "contrasenia", "clave", "claveclave", "admin", "administrador",
-    "administrator", "mettav", "mettavgroup", "qwerty", "qwertyuiop", "abcdefgh", "abcdefghijkl",
-    "bienvenido", "bienvenida", "welcome", "letmein", "iloveyou", "cambiaestaclave",
-    "inventario", "zonafranca", "colombia", "football", "monkey", "dragon",
-}
+# Contraseña de ejemplo del repositorio: no se acepta para el primer administrador.
+_CONTRASENAS_DE_EJEMPLO = {"cambia-esta-clave"}
 
 COOKIE_ACCESO = "mettav_access"
 COOKIE_REFRESCO = "mettav_refresh"
@@ -101,18 +98,16 @@ def resolver_clave_secreta(carpeta_instancia: Path) -> str:
 # ---------------------------------------------------------------- contraseñas
 
 def validar_contrasena(contrasena, usuario: str | None = None) -> str | None:
-    """Devuelve el motivo por el que la contraseña no sirve, o None si es aceptable."""
-    if not isinstance(contrasena, str) or not MIN_LARGO_CONTRASENA <= len(contrasena) <= MAX_LARGO_CONTRASENA:
-        return f"La contraseña debe tener entre {MIN_LARGO_CONTRASENA} y {MAX_LARGO_CONTRASENA} caracteres."
-    if contrasena.isdigit() or contrasena.isalpha():
-        return "La contraseña debe combinar letras y números o símbolos."
-    if len(set(contrasena)) <= 3:
-        return "La contraseña es demasiado repetitiva."
-    if contrasena.lower() in _CONTRASENAS_DE_EJEMPLO or re.sub(r"[^a-z]", "", contrasena.lower()) in _CONTRASENAS_COMUNES:
-        return "Esa contraseña es demasiado común; elige otra."
-    nombre = (usuario or "").strip().lower()
-    if len(nombre) >= 3 and nombre in contrasena.lower():
-        return "La contraseña no puede contener el nombre de usuario."
+    """Devuelve el motivo por el que la contraseña no sirve, o None si es aceptable.
+
+    No hay reglas de largo mínimo ni de composición: sirve cualquier combinación de
+    letras, números o símbolos. Solo se exige que no esté vacía y no pase de 256
+    caracteres (el tope evita abusar del costoso cálculo del hash).
+    """
+    if not isinstance(contrasena, str) or not contrasena:
+        return "Escribe la contraseña."
+    if len(contrasena) > MAX_LARGO_CONTRASENA:
+        return f"La contraseña no puede pasar de {MAX_LARGO_CONTRASENA} caracteres."
     return None
 
 

@@ -29,18 +29,18 @@
             data-token="{{ token }}"
         >
             <p class="form-message" data-state="info">
-                Elige una contraseña de 12 o más caracteres que mezcle letras con números o símbolos y que no sea una palabra común.
+                Elige la contraseña nueva: puedes usar las letras, números o símbolos que quieras.
             </p>
             <div class="field-group">
                 <label class="field-label" for="new-password"><span>Contraseña nueva</span></label>
                 <div class="input-wrap">
-                    <input id="new-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                    <input id="new-password" type="password" maxlength="256" autocomplete="new-password" required>
                 </div>
             </div>
             <div class="field-group">
                 <label class="field-label" for="repeat-password"><span>Repite la contraseña</span></label>
                 <div class="input-wrap">
-                    <input id="repeat-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                    <input id="repeat-password" type="password" maxlength="256" autocomplete="new-password" required>
                 </div>
             </div>
             {% if pide_codigo %}

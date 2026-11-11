@@ -65,7 +65,7 @@ def test_registrar_datos_invalidos(client, creador_usuarios, iniciar_sesion):
     creador_usuarios("admin", es_admin=True)
     iniciar_sesion("admin")
 
-    r1 = client.post("/api/usuarios", json={"usuario": "x", "contrasena": "ab"})  # muy corta
+    r1 = client.post("/api/usuarios", json={"usuario": "x", "contrasena": ""})  # vacía
     assert r1.status_code == 400
 
     r2 = client.post("/api/usuarios", json={"contrasena": "clave-segura-123"})  # falta usuario

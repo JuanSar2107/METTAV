@@ -6,7 +6,7 @@ from sqlalchemy import inspect, text
 
 from .database import opciones_motor, url_base_de_datos
 from .extensions import db
-from .security import configurar_seguridad, resolver_clave_secreta, validar_contrasena
+from .security import _CONTRASENAS_DE_EJEMPLO, configurar_seguridad, resolver_clave_secreta, validar_contrasena
 
 
 def _sembrar_admin(app: Flask) -> None:
@@ -33,6 +33,8 @@ def _sembrar_admin(app: Flask) -> None:
         return
 
     motivo = validar_contrasena(clave, nombre)
+    if motivo is None and clave.lower() in _CONTRASENAS_DE_EJEMPLO:
+        motivo = "es la contraseña de ejemplo"
     if motivo is not None:
         app.logger.error(
             "ADMIN_PASSWORD no es segura (%s) y no se crea el administrador '%s'. "
@@ -156,10 +158,6 @@ def create_app(test_config: dict | None = None) -> Flask:
                     connection.execute(
                         text(f"ALTER TABLE usuarios ADD COLUMN {column_name} {column_type}")
                     )
-                if "cambio_requerido" in missing_columns:
-                    # Las cuentas existentes son anteriores a la política de contraseñas:
-                    # deben renovarla en su próximo ingreso.
-                    connection.execute(text("UPDATE usuarios SET cambio_requerido = TRUE"))
 
         movement_columns = {
             column["name"]

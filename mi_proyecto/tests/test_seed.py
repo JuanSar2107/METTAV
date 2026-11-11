@@ -88,7 +88,7 @@ def test_no_crea_admin_si_falta_la_contrasena(tmp_path, monkeypatch):
         db.drop_all()
 
 
-@pytest.mark.parametrize("clave", ["cambia-esta-clave", "corta1", "administrador", "admin-clave-2026"])
+@pytest.mark.parametrize("clave", ["cambia-esta-clave", "CAMBIA-ESTA-CLAVE"])
 def test_no_crea_admin_con_contrasena_insegura(tmp_path, monkeypatch, clave):
     monkeypatch.setenv("ADMIN_USER", "admin")
     monkeypatch.setenv("ADMIN_PASSWORD", clave)

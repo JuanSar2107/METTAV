@@ -27,8 +27,7 @@
             data-logout-url="{{ url_for('usuarios.cerrar_sesion') }}"
         >
             <p class="form-message" data-state="error">
-                Por seguridad debes crear una contraseña nueva antes de continuar.
-                Usa 12 o más caracteres, mezcla letras con números o símbolos y evita palabras comunes.
+                Debes crear una contraseña nueva antes de continuar. Puedes usar las letras, números o símbolos que quieras.
             </p>
             <div class="field-group">
                 <label class="field-label" for="current-password"><span>Contraseña actual</span></label>
@@ -39,7 +38,7 @@
             <div class="field-group">
                 <label class="field-label" for="new-password"><span>Contraseña nueva</span></label>
                 <div class="input-wrap">
-                    <input id="new-password" type="password" minlength="12" maxlength="256" autocomplete="new-password" required>
+                    <input id="new-password" type="password" maxlength="256" autocomplete="new-password" required>
                 </div>
             </div>
             <p class="form-message" id="form-message" role="status" aria-live="polite" hidden></p>
