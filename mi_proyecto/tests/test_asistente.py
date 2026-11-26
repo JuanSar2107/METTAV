@@ -317,3 +317,66 @@ def test_tiempo_de_espera_configurable(monkeypatch, con_clave):
     monkeypatch.setenv("GEMINI_TIMEOUT", "no-es-numero")
     gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
     assert usados == [60, 120, 60]
+
+
+def _respuesta_ok(texto="ok"):
+    cuerpo = {"candidates": [{"content": {"parts": [{"text": texto}]}}]}
+    return _RespuestaFalsa(json.dumps(cuerpo).encode("utf-8"))
+
+
+def _saturado(peticion):
+    return urllib.error.HTTPError(peticion.full_url, 503, "Service Unavailable", {}, io.BytesIO(b"{}"))
+
+
+def test_gemini_saturado_se_reintenta_y_responde(monkeypatch, con_clave):
+    llamadas = []
+    monkeypatch.setattr(gemini.time, "sleep", lambda _s: None)
+
+    def _urlopen(peticion, timeout):
+        llamadas.append(peticion.full_url)
+        if len(llamadas) < 3:
+            raise _saturado(peticion)
+        return _respuesta_ok("listo")
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    assert gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}]) == "listo"
+    assert len(llamadas) == 3
+
+
+def test_gemini_saturado_usa_el_modelo_de_respaldo(monkeypatch, con_clave):
+    llamadas = []
+    monkeypatch.setattr(gemini.time, "sleep", lambda _s: None)
+    monkeypatch.setenv("GEMINI_MODELOS_RESPALDO", "modelo-respaldo, otro-modelo")
+
+    def _urlopen(peticion, timeout):
+        llamadas.append(peticion.full_url)
+        if "modelo-respaldo" not in peticion.full_url:
+            raise _saturado(peticion)
+        return _respuesta_ok("desde el respaldo")
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    assert gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}]) == "desde el respaldo"
+    assert sum("gemini-3.5-flash" in url for url in llamadas) == 3  # el principal, con sus reintentos
+    assert "modelo-respaldo" in llamadas[-1]
+
+
+def test_gemini_siempre_saturado_da_mensaje_claro(monkeypatch, con_clave):
+    monkeypatch.setattr(gemini.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", lambda peticion, timeout: (_ for _ in ()).throw(_saturado(peticion)))
+    with pytest.raises(gemini.GeminiError, match="saturado"):
+        gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+
+
+def test_error_de_clave_no_se_reintenta(monkeypatch, con_clave):
+    llamadas = []
+    monkeypatch.setattr(gemini.time, "sleep", lambda _s: None)
+
+    def _urlopen(peticion, timeout):
+        llamadas.append(1)
+        detalle = json.dumps({"error": {"message": "API key not valid."}})
+        raise urllib.error.HTTPError(peticion.full_url, 400, "Bad Request", {}, io.BytesIO(detalle.encode()))
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    with pytest.raises(gemini.GeminiError, match="no es válida"):
+        gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+    assert len(llamadas) == 1

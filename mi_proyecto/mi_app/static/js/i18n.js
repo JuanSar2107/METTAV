@@ -253,6 +253,7 @@
         "GESTIÓN DE CATEGORÍAS": "CATEGORY MANAGEMENT",
         "Gemini devolvió una respuesta no válida.": "Gemini returned an invalid response.",
         "Gemini tardó demasiado en responder. Inténtalo de nuevo en un momento.": "Gemini took too long to answer. Try again in a moment.",
+        "Gemini está saturado en este momento. Inténtalo de nuevo en unos minutos.": "Gemini is overloaded right now. Try again in a few minutes.",
         "Gemini no devolvió una respuesta. Intenta reformular la pregunta.": "Gemini did not return an answer. Try rephrasing the question.",
         "Generando...": "Generating...",
         "Grupo": "Group",

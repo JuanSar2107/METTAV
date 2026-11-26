@@ -52,6 +52,8 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
       # Segundos máximos de espera por una respuesta del asistente (10 a 240).
       GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-60}
+      # Modelos que se prueban si el principal está saturado, separados por comas.
+      GEMINI_MODELOS_RESPALDO: ${GEMINI_MODELOS_RESPALDO:-}
     # Coolify expone el servicio a través de su propio proxy (dominio + HTTPS),
     # así que NO se publica ningún puerto del host. De lo contrario aparece:
     #   Bind for :::8000 failed: port is already allocated
