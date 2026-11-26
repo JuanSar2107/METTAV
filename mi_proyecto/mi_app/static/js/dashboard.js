@@ -60,7 +60,7 @@
     }
 
     // Cada foto se acomoda a su forma: si se parece al recuadro lo llena; si es mucho más
-    // alta o más ancha se achica para verse completa, sobre el fondo de siempre. La imagen
+    // alta o más ancha se achica para verse completa, con la bodega de fondo. La imagen
     // de la bodega (artículos sin foto) siempre llena el recuadro, como antes.
     const fitImage = (image) => {
         const box = image.parentElement;
@@ -69,7 +69,9 @@
         const difference = Math.abs(Math.log(
             (image.naturalWidth / image.naturalHeight) / (box.clientWidth / box.clientHeight),
         ));
-        image.classList.toggle("is-contained", !isDefault && difference > 0.18);
+        const contained = !isDefault && difference > 0.18;
+        image.classList.toggle("is-contained", contained);
+        box.classList.toggle("has-warehouse-backdrop", contained);
     };
     window.mettavFitImage = fitImage;
 

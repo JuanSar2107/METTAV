@@ -3194,7 +3194,7 @@ body {
 }
 
 /* Fotos que no tienen la forma del recuadro: se achican para verse completas,
-   sobre el fondo de siempre, en lugar de recortarse. */
+   con la imagen de la bodega difuminada de fondo, en lugar de recortarse. */
 .item-image,
 .dialog-image {
     position: relative;
@@ -3203,6 +3203,18 @@ body {
 .item-image.is-contained,
 .dialog-image.is-contained {
     object-fit: contain;
+    background: transparent;
+}
+
+.item-image-wrap.has-warehouse-backdrop::before,
+.dialog-gallery.has-warehouse-backdrop::before {
+    position: absolute;
+    /* Se extiende más allá del borde para que el difuminado no deje orillas claras. */
+    inset: -32px;
+    content: "";
+    background: url("../images/workshop-bg.jpg") center / cover no-repeat;
+    filter: blur(14px);
+    transform: scale(1.04);
 }
 
 .dialog-gallery {
