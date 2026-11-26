@@ -59,22 +59,17 @@
         });
     }
 
-    // Cada imagen se acomoda a su forma: si se parece al recuadro lo llena; si es mucho
-    // más alta o más ancha se ve completa, sobre un fondo difuminado de la misma foto.
+    // Cada foto se acomoda a su forma: si se parece al recuadro lo llena; si es mucho más
+    // alta o más ancha se achica para verse completa, sobre el fondo de siempre. La imagen
+    // de la bodega (artículos sin foto) siempre llena el recuadro, como antes.
     const fitImage = (image) => {
         const box = image.parentElement;
         if (!image.naturalWidth || !box || !box.clientWidth || !box.clientHeight) return;
+        const isDefault = (image.currentSrc || image.src).includes("/images/workshop-bg.jpg");
         const difference = Math.abs(Math.log(
             (image.naturalWidth / image.naturalHeight) / (box.clientWidth / box.clientHeight),
         ));
-        const contained = difference > 0.18;
-        image.classList.toggle("is-contained", contained);
-        box.classList.toggle("has-backdrop", contained);
-        if (contained) {
-            box.style.setProperty("--image-backdrop", `url("${image.currentSrc || image.src}")`);
-        } else {
-            box.style.removeProperty("--image-backdrop");
-        }
+        image.classList.toggle("is-contained", !isDefault && difference > 0.18);
     };
     window.mettavFitImage = fitImage;
 

@@ -3193,18 +3193,8 @@ body {
     }
 }
 
-/* Imágenes que no tienen la forma del recuadro: se ven completas sobre un fondo
-   difuminado de la misma foto, en lugar de recortarse. */
-.item-image-wrap.has-backdrop::before,
-.dialog-gallery.has-backdrop::before {
-    position: absolute;
-    inset: -24px;
-    content: "";
-    background: var(--image-backdrop) center / cover no-repeat;
-    filter: blur(22px) saturate(1.15);
-    opacity: 0.6;
-}
-
+/* Fotos que no tienen la forma del recuadro: se achican para verse completas,
+   sobre el fondo de siempre, en lugar de recortarse. */
 .item-image,
 .dialog-image {
     position: relative;
@@ -3213,7 +3203,6 @@ body {
 .item-image.is-contained,
 .dialog-image.is-contained {
     object-fit: contain;
-    background: transparent;
 }
 
 .dialog-gallery {
