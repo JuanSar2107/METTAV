@@ -77,7 +77,9 @@
         const difference = Math.abs(Math.log(
             (image.naturalWidth / image.naturalHeight) / (box.clientWidth / box.clientHeight),
         ));
-        const contained = !isDefault && difference > 0.18;
+        // En el detalle la foto debe verse completa: solo llena el recuadro si casi no se recorta.
+        const tolerance = image.id === "dialog-image" ? 0.05 : 0.18;
+        const contained = !isDefault && difference > tolerance;
         image.classList.toggle("is-contained", contained);
         box.classList.toggle("has-warehouse-backdrop", contained);
     };
