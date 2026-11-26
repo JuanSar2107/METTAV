@@ -2144,8 +2144,38 @@
     const userDetailPhone = document.querySelector("#user-detail-phone");
     const userDetailAddress = document.querySelector("#user-detail-address");
 
+    const userDeleteButton = document.querySelector("#user-detail-delete");
+    let userCardOpen = null;
+    if (userDeleteButton instanceof HTMLButtonElement && userDetailDialog instanceof HTMLDialogElement) {
+        userDeleteButton.addEventListener("click", async () => {
+            if (!userCardOpen) return;
+            const name = userCardOpen.dataset.fullname || userCardOpen.dataset.username;
+            const confirmed = window.confirm(
+                `¿Eliminar la cuenta de ${name}?\n\n`
+                + "Ya no podrá iniciar sesión y se cerrarán sus sesiones abiertas. "
+                + "Sus movimientos y remisiones se conservan en el historial. Esto no se puede deshacer.",
+            );
+            if (!confirmed) return;
+            userDeleteButton.disabled = true;
+            try {
+                const response = await fetch(`/api/usuarios/${userCardOpen.dataset.id}`, { method: "DELETE" });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(result.error || "No se pudo eliminar el usuario.");
+                userDetailDialog.close();
+                window.location.reload();
+            } catch (error) {
+                window.alert(error.message || "No se pudo conectar con el servidor.");
+            } finally {
+                userDeleteButton.disabled = false;
+            }
+        });
+    }
+
     const openUserDetails = (card) => {
         if (!(userDetailDialog instanceof HTMLDialogElement) || !card) return;
+        userCardOpen = card;
+        // La propia cuenta no se elimina desde aquí.
+        if (userDeleteButton) userDeleteButton.hidden = card.dataset.id === userDetailDialog.dataset.currentUser;
 
         const {
             username,

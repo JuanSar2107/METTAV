@@ -19,7 +19,7 @@ from mi_app.security import (
     validar_contrasena,
 )
 from mi_app.image_uploads import eliminar_imagen_subida, guardar_imagen
-from mi_app.models import RegistroAcceso, SesionToken, Usuario
+from mi_app.models import RegistroAcceso, SesionToken, TokenRecuperacion, Usuario
 
 usuarios_bp = Blueprint("usuarios", __name__, url_prefix="/api")
 
@@ -349,6 +349,41 @@ def eliminar_usuario_actual():
     registrar_acceso("cuenta_eliminada", True, usuario=nombre, id_usuario=id_usuario)
     cerrar_sesion_actual()
     return jsonify(mensaje="Cuenta eliminada.")
+
+
+@usuarios_bp.delete("/usuarios/<int:id_usuario>")
+def eliminar_usuario(id_usuario: int):
+    """Un administrador elimina la cuenta de otra persona.
+
+    Su historial (movimientos, remisiones, auditoría) se conserva con su nombre.
+    No se puede eliminar la propia cuenta por aquí ni dejar el sistema sin administradores.
+    """
+    administrador = _usuario_actual()
+    if administrador is None:
+        return jsonify(error="Debes iniciar sesión."), 401
+    if not administrador.es_admin:
+        return jsonify(error="Solo un administrador puede eliminar usuarios."), 403
+    if id_usuario == administrador.id_usuario:
+        return jsonify(error="No puedes eliminar tu propia cuenta desde aquí."), 409
+
+    usuario = db.session.get(Usuario, id_usuario)
+    if usuario is None:
+        return jsonify(error="El usuario no existe."), 404
+    if usuario.es_admin and Usuario.query.filter_by(es_admin=True).count() <= 1:
+        return jsonify(error="No puedes eliminar al único administrador."), 409
+
+    nombre = usuario.usuario
+    imagen = usuario.imagen_perfil
+    # Se cierran sus sesiones abiertas y se invalidan sus enlaces de recuperación.
+    revocar_sesiones_de(id_usuario)
+    SesionToken.query.filter_by(id_usuario=id_usuario).delete()
+    TokenRecuperacion.query.filter_by(id_usuario=id_usuario).delete()
+    db.session.delete(usuario)
+    db.session.commit()
+    eliminar_imagen_subida(imagen, "profiles")
+    registrar_acceso("usuario_eliminado", True, usuario=nombre, id_usuario=id_usuario,
+                     detalle=f"Eliminado por {administrador.usuario}")
+    return jsonify(mensaje="Usuario eliminado.")
 
 
 @usuarios_bp.post("/usuarios/me/2fa/iniciar")

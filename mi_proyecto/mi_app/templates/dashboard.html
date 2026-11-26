@@ -1438,7 +1438,7 @@
     </div>
 </dialog>
 
-<dialog class="item-dialog user-detail-dialog" id="user-detail-dialog" aria-labelledby="user-detail-name">
+<dialog class="item-dialog user-detail-dialog" id="user-detail-dialog" aria-labelledby="user-detail-name" data-current-user="{{ usuario.id_usuario }}">
     <button class="dialog-close" id="close-user-detail" type="button" aria-label="Cerrar detalle">
         <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m18 6-12 12M6 6l12 12" />
@@ -1465,6 +1465,12 @@
                     <p class="user-dialog-summary-value user-account-state">Registrada</p>
                 </div>
             </div>
+            <button class="user-delete-button" id="user-detail-delete" type="button" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6" />
+                </svg>
+                <span>Eliminar usuario</span>
+            </button>
         </aside>
         <div class="dialog-content user-dialog-content">
             <p class="eyebrow">INFORMACIÓN PERSONAL</p>

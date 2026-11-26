@@ -3269,3 +3269,42 @@ body {
     }
 }
 
+.user-delete-button {
+    display: inline-flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid rgba(161, 38, 38, 0.35);
+    border-radius: 8px;
+    background: #fff;
+    color: #a12626;
+    font: 600 14px 'Barlow', sans-serif;
+    cursor: pointer;
+}
+
+.user-delete-button:hover {
+    border-color: #a12626;
+    background: #fdecec;
+}
+
+.user-delete-button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.user-delete-button[hidden] {
+    display: none;
+}
+
+.user-delete-button svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
