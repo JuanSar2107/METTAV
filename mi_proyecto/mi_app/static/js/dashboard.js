@@ -59,6 +59,25 @@
         });
     }
 
+    // Cada imagen se acomoda a su forma: si se parece al recuadro lo llena; si es mucho
+    // más alta o más ancha se ve completa, sobre un fondo difuminado de la misma foto.
+    const fitImage = (image) => {
+        const box = image.parentElement;
+        if (!image.naturalWidth || !box || !box.clientWidth || !box.clientHeight) return;
+        const difference = Math.abs(Math.log(
+            (image.naturalWidth / image.naturalHeight) / (box.clientWidth / box.clientHeight),
+        ));
+        const contained = difference > 0.18;
+        image.classList.toggle("is-contained", contained);
+        box.classList.toggle("has-backdrop", contained);
+        if (contained) {
+            box.style.setProperty("--image-backdrop", `url("${image.currentSrc || image.src}")`);
+        } else {
+            box.style.removeProperty("--image-backdrop");
+        }
+    };
+    window.mettavFitImage = fitImage;
+
     document.querySelectorAll(".item-image, #dialog-image").forEach((image) => {
         image.addEventListener("error", () => {
             const fallback = image.dataset.fallback;
@@ -66,6 +85,15 @@
                 image.src = fallback;
             }
         });
+        image.addEventListener("load", () => fitImage(image));
+        if (image.complete) fitImage(image);
+    });
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+            document.querySelectorAll(".item-image, #dialog-image").forEach(fitImage);
+        }, 150);
     });
 
     const avatarImage = document.querySelector("#profile-trigger-image");
@@ -1102,6 +1130,8 @@
         movementFormInput.value = "";
         movementNotesInput.value = "";
         dialog.showModal();
+        // Con la ventana ya visible se conoce el tamaño del recuadro de la imagen.
+        window.requestAnimationFrame(() => fitImage(detailImage));
     };
 
     // Datos de zona franca, trazabilidad y servicio: solo se muestran los que el artículo tiene.
@@ -1349,8 +1379,17 @@
         entryMessage.hidden = false;
     };
 
-    document.querySelectorAll(".more-button").forEach((button) => {
-        button.addEventListener("click", () => openDetails(button.closest(".inventory-card")));
+    // Toda la tarjeta abre el detalle (menos el botón de eliminar).
+    document.querySelectorAll("#inventory-grid .inventory-card").forEach((card) => {
+        card.addEventListener("click", (event) => {
+            if (event.target.closest(".delete-item")) return;
+            openDetails(card);
+        });
+        card.addEventListener("keydown", (event) => {
+            if (event.target !== card || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            openDetails(card);
+        });
     });
 
     document.querySelector("#close-dialog").addEventListener("click", () => dialog.close());

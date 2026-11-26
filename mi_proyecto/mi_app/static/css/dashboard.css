@@ -642,6 +642,15 @@ body {
     box-shadow: 0 10px 22px rgba(5, 20, 45, 0.13);
 }
 
+.inventory-card {
+    cursor: pointer;
+}
+
+.inventory-card:focus-visible {
+    outline: 3px solid rgba(75, 155, 213, 0.55);
+    outline-offset: 3px;
+}
+
 .item-image-wrap {
     position: relative;
     aspect-ratio: 16 / 10;
@@ -1064,7 +1073,8 @@ body {
     }
 
     .dialog-layout {
-        grid-template-columns: 1fr;
+        /* minmax(0, ...) evita que un contenido ancho empuje la ventana fuera de la pantalla. */
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .dialog-image {
@@ -1445,13 +1455,14 @@ body {
 
 .sizfra-fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px 12px;
     margin: 0 0 16px;
 }
 
 .sizfra-fields label {
     display: flex;
+    min-width: 0;
     flex-direction: column;
     gap: 4px;
     color: var(--label);
@@ -3180,4 +3191,38 @@ body {
         justify-content: center;
         padding: 0;
     }
+}
+
+/* Imágenes que no tienen la forma del recuadro: se ven completas sobre un fondo
+   difuminado de la misma foto, en lugar de recortarse. */
+.item-image-wrap.has-backdrop::before,
+.dialog-gallery.has-backdrop::before {
+    position: absolute;
+    inset: -24px;
+    content: "";
+    background: var(--image-backdrop) center / cover no-repeat;
+    filter: blur(22px) saturate(1.15);
+    opacity: 0.6;
+}
+
+.item-image,
+.dialog-image {
+    position: relative;
+}
+
+.item-image.is-contained,
+.dialog-image.is-contained {
+    object-fit: contain;
+    background: transparent;
+}
+
+.dialog-gallery {
+    overflow: hidden;
+    background: #dce8ed;
+}
+
+.category-label,
+.service-label,
+.dialog-thumbs {
+    z-index: 1;
 }

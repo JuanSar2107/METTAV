@@ -210,6 +210,10 @@
                 {% for articulo in articulos %}
                 <article
                     class="inventory-card"
+                    tabindex="0"
+                    role="button"
+                    aria-haspopup="dialog"
+                    aria-label="Ver más sobre {{ articulo.nombre }}"
                     data-id="{{ articulo.id }}"
                     data-name="{{ articulo.nombre }}"
                     data-code="{{ articulo.codigo }}"
@@ -268,12 +272,6 @@
                                 <span class="stock-unit">{{ articulo.unidad }} disponibles</span>
                             </span>
                             <div class="item-card-actions">
-                                <button class="more-button" type="button" aria-label="Ver más sobre {{ articulo.nombre }}">
-                                    Ver más
-                                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                                        <path d="M5 12h14m-6-6 6 6-6 6" />
-                                    </svg>
-                                </button>
                                 {% if es_admin %}
                                 <button class="delete-item" type="button" aria-label="Eliminar {{ articulo.nombre }}" title="Eliminar artículo">
                                     <svg viewBox="0 0 24 24" aria-hidden="true">
