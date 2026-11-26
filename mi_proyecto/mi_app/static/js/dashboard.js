@@ -64,8 +64,16 @@
     // de la bodega (artículos sin foto) siempre llena el recuadro, como antes.
     const fitImage = (image) => {
         const box = image.parentElement;
-        if (!image.naturalWidth || !box || !box.clientWidth || !box.clientHeight) return;
+        if (!image.naturalWidth || !box) return;
         const isDefault = (image.currentSrc || image.src).includes("/images/workshop-bg.jpg");
+        // En el detalle, la columna de la foto se ensancha si la foto es horizontal y se
+        // angosta si es vertical; así la foto se ve más grande y el texto tiene su espacio.
+        if (image.id === "dialog-image") {
+            const shape = image.naturalWidth / image.naturalHeight;
+            const column = isDefault ? 1 : shape >= 1.3 ? 1.5 : shape <= 0.8 ? 0.8 : 1.1;
+            box.closest(".dialog-layout")?.style.setProperty("--photo-column", `${column}fr`);
+        }
+        if (!box.clientWidth || !box.clientHeight) return;
         const difference = Math.abs(Math.log(
             (image.naturalWidth / image.naturalHeight) / (box.clientWidth / box.clientHeight),
         ));
