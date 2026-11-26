@@ -193,6 +193,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             "anulado_en": "TIMESTAMP",
             "anulado_por": "VARCHAR(80)",
             "motivo_anulacion": "TEXT",
+            "destino": "VARCHAR(160)",
         }
         missing_movement_columns = {
             column_name: column_type
@@ -244,6 +245,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             "procedencia": "VARCHAR(20)",
             "estado": "VARCHAR(40)",
             "serial": "VARCHAR(80)",
+            "seriales": "TEXT",
             "responsable": "VARCHAR(120)",
             "fecha_ingreso": "DATE",
             "documento_soporte": "VARCHAR(160)",

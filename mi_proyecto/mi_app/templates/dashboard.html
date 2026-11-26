@@ -203,9 +203,41 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="toolbar-category-filter">
+                    <select id="owner-filter" class="category-filter-select" aria-label="Filtrar por propietario">
+                        <option value="">Todos los propietarios</option>
+                        {% for nombre_propietario in articulos|map(attribute='propietario')|unique|sort %}
+                        <option value="{{ nombre_propietario }}">{{ nombre_propietario }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="view-toggle" role="group" aria-label="Forma de ver el inventario">
+                    <button class="view-toggle-button is-active" type="button" data-view="cards" aria-pressed="true">Tarjetas</button>
+                    <button class="view-toggle-button" type="button" data-view="general" aria-pressed="false">Inventario general</button>
+                </div>
                 <span class="results-count" id="results-count" aria-live="polite">{{ articulos|length }} artículos</span>
             </div>
 
+            <datalist id="client-options">
+                {% for nombre_cliente in articulos|map(attribute='cliente')|select|unique|sort %}<option value="{{ nombre_cliente }}"></option>{% endfor %}
+            </datalist>
+            <section class="general-inventory" id="general-inventory" aria-label="Inventario general" hidden>
+                <p class="general-inventory-note">Todo lo que hay en bodega, agrupado por artículo. Haz clic en una fila para ver de quién es cada unidad.</p>
+                <div class="general-inventory-scroll">
+                    <table class="general-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Artículo</th>
+                                <th scope="col">Cantidad</th>
+                                <th scope="col">De quién es</th>
+                                <th scope="col">Estado del servicio</th>
+                                <th scope="col">Ubicación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="general-inventory-body"></tbody>
+                    </table>
+                </div>
+            </section>
             <section class="inventory-grid" id="inventory-grid" aria-label="Artículos del inventario">
                 {% for articulo in articulos %}
                 <article
@@ -225,7 +257,10 @@
                     data-fob="{{ articulo.valor_fob_usd if articulo.valor_fob_usd is not none else '' }}"
                     data-origin="{{ articulo.procedencia or '' }}"
                     data-condition="{{ articulo.estado or '' }}"
-                    data-serial="{{ articulo.serial or '' }}"
+                    data-serial="{{ articulo.lista_seriales|join(', ') }}"
+                    data-serials='{{ articulo.lista_seriales|tojson }}'
+                    data-owner="{{ articulo.propietario }}"
+                    data-last-exit="{{ ultimas_salidas.get(articulo.codigo, '') }}"
                     data-responsible="{{ articulo.responsable or '' }}"
                     data-entry-date="{{ articulo.fecha_ingreso.isoformat() if articulo.fecha_ingreso else '' }}"
                     data-entry-doc="{{ articulo.documento_soporte or '' }}"
@@ -266,6 +301,7 @@
                     <div class="item-card-body">
                         <h2>{{ articulo.nombre }}</h2>
                         <p class="item-code">{{ articulo.codigo }}</p>
+                        <p class="item-owner{% if not articulo.cliente and articulo.grupo != '004' %} is-company{% endif %}">{{ articulo.propietario }}</p>
                         <div class="item-card-meta">
                             <span class="stock-label{% if articulo.stock <= 5 %} is-low{% endif %}">
                                 <span class="stock-value">{{ articulo.stock }}</span>
@@ -644,21 +680,22 @@
                 <div data-zf-field="fob" hidden><dt>Valor FOB</dt><dd></dd></div>
                 <div data-zf-field="origin" hidden><dt>Procedencia</dt><dd></dd></div>
                 <div data-zf-field="condition" hidden><dt>Estado</dt><dd></dd></div>
-                <div data-zf-field="serial" hidden><dt>Serial</dt><dd></dd></div>
+                <div data-zf-field="serial" hidden><dt>Seriales</dt><dd></dd></div>
                 <div data-zf-field="responsible" hidden><dt>Responsable</dt><dd></dd></div>
                 <div data-zf-field="entryDate" hidden><dt>Fecha de ingreso</dt><dd></dd></div>
                 <div data-zf-field="entryDoc" hidden><dt>Documento de ingreso</dt><dd></dd></div>
                 <div data-zf-field="exitDate" hidden><dt>Fecha de retiro</dt><dd></dd></div>
                 <div data-zf-field="exitDoc" hidden><dt>Documento de retiro</dt><dd></dd></div>
                 <div data-zf-field="exitReason" hidden><dt>Razón del retiro</dt><dd></dd></div>
-                <div data-zf-field="client" hidden><dt>Cliente</dt><dd></dd></div>
+                <div data-zf-field="owner"><dt>Propietario</dt><dd></dd></div>
+                <div class="item-details-full" data-zf-field="lastExit" hidden><dt>Última salida</dt><dd></dd></div>
                 <div data-zf-field="serviceType" hidden><dt>Servicio</dt><dd></dd></div>
             </dl>
             {% if puede_operar %}
             <details class="service-editor" id="service-editor">
                 <summary>Cliente y estado del servicio</summary>
                 <form id="service-form">
-                    <label><span>Cliente</span><input name="cliente" type="text" maxlength="160" autocomplete="off"></label>
+                    <label><span>Cliente</span><input name="cliente" type="text" maxlength="160" list="client-options" placeholder="Vacío = activo de la empresa" autocomplete="off"></label>
                     <label><span>Servicio</span>
                         <select name="tipo_servicio">
                             <option value="">Sin servicio</option>
@@ -691,6 +728,10 @@
                 <label for="movement-form-number">
                     <span>Formulario</span>
                     <input id="movement-form-number" type="text" maxlength="24" placeholder="Ej. 1383926" autocomplete="off">
+                </label>
+                <label class="sizfra-fields-full" for="movement-destination">
+                    <span>Para qué se usa (solo retiros)</span>
+                    <input id="movement-destination" type="text" maxlength="160" list="client-options" placeholder="Ej. Pruebas del control de combustible de Helicentro Perú" autocomplete="off">
                 </label>
                 <label class="sizfra-fields-full" for="movement-notes">
                     <span>Observaciones o razón</span>
@@ -1190,7 +1231,7 @@
                 </label>
                 <label class="admin-field" for="new-item-tariff">
                     <span>Subpartida arancelaria</span>
-                    <input id="new-item-tariff" name="subpartida" type="text" maxlength="20" placeholder="Ej. 8413.30.10.00" autocomplete="off">
+                    <input id="new-item-tariff" name="subpartida" type="text" maxlength="20" placeholder="Ej. 8413301000" inputmode="numeric" autocomplete="off">
                 </label>
                 <label class="admin-field" for="new-item-fob">
                     <span>Valor FOB (USD)</span>
@@ -1215,10 +1256,13 @@
                         <option value="Para fabricación"></option>
                     </datalist>
                 </label>
-                <label class="admin-field" for="new-item-serial">
-                    <span>Serial</span>
-                    <input id="new-item-serial" name="serial" type="text" maxlength="80" autocomplete="off">
-                </label>
+                <div class="admin-field admin-field--full serial-list" id="new-item-serials">
+                    <span>Seriales <small class="serial-list-count"></small></span>
+                    <div class="serial-list-rows">
+                        <div class="serial-list-row"><input name="serial" type="text" maxlength="80" autocomplete="off" placeholder="Serial de la unidad 1" aria-label="Serial 1"></div>
+                    </div>
+                    <button class="serial-list-add" type="button">+ Agregar serial</button>
+                </div>
                 <label class="admin-field" for="new-item-responsible">
                     <span>Responsable</span>
                     <input id="new-item-responsible" name="responsable" type="text" maxlength="120" list="new-item-responsible-options" placeholder="Ej. Operativos">
@@ -1235,19 +1279,26 @@
                     <span>Documento soporte</span>
                     <input id="new-item-entry-doc" name="documento_soporte" type="text" maxlength="160" placeholder="Ej. Remisión No 0001">
                 </label>
-                <p class="admin-field--full admin-form-section">Mercancía de clientes (opcional)</p>
-                <label class="admin-field admin-field--full" for="new-item-client">
-                    <span>Cliente</span>
-                    <input id="new-item-client" name="cliente" type="text" maxlength="160" placeholder="Ej. MOTORKAM COMPANY S.A.S">
+                <p class="admin-field--full admin-form-section">Propietario</p>
+                <label class="admin-field admin-field--full" for="new-item-owner">
+                    <span>¿De quién es este artículo?</span>
+                    <select id="new-item-owner" name="propietario">
+                        <option value="empresa">Activo de la empresa</option>
+                        <option value="cliente">Mercancía de un cliente</option>
+                    </select>
                 </label>
-                <label class="admin-field" for="new-item-service-type">
+                <label class="admin-field admin-field--full" for="new-item-client" data-owner-client hidden>
+                    <span>Cliente</span>
+                    <input id="new-item-client" name="cliente" type="text" maxlength="160" list="client-options" placeholder="Ej. Helicentro Perú S.A.C" autocomplete="off">
+                </label>
+                <label class="admin-field" for="new-item-service-type" data-owner-client hidden>
                     <span>Servicio</span>
                     <select id="new-item-service-type" name="tipo_servicio">
                         <option value="">Sin servicio</option>
                         {% for tipo in tipos_servicio %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
                     </select>
                 </label>
-                <label class="admin-field" for="new-item-service-status">
+                <label class="admin-field" for="new-item-service-status" data-owner-client hidden>
                     <span>Estado del servicio</span>
                     <select id="new-item-service-status" name="estado_servicio">
                         <option value="">Sin estado</option>
@@ -1332,7 +1383,7 @@
                     <input name="marca" type="text" maxlength="80">
                 </label>
                 <label class="admin-field"><span>Subpartida arancelaria</span>
-                    <input name="subpartida" type="text" maxlength="20" autocomplete="off">
+                    <input name="subpartida" type="text" maxlength="20" placeholder="Ej. 8413301000" inputmode="numeric" autocomplete="off">
                 </label>
                 <label class="admin-field"><span>Valor FOB (USD)</span>
                     <input name="valor_fob_usd" type="text" inputmode="decimal" maxlength="20">
@@ -1353,9 +1404,11 @@
                         {% for estado in estados_servicio %}<option value="{{ estado }}">{{ estado }}</option>{% endfor %}
                     </select>
                 </label>
-                <label class="admin-field"><span>Serial</span>
-                    <input name="serial" type="text" maxlength="80" autocomplete="off">
-                </label>
+                <div class="admin-field admin-field--full serial-list" id="edit-item-serials">
+                    <span>Seriales <small class="serial-list-count"></small></span>
+                    <div class="serial-list-rows"></div>
+                    <button class="serial-list-add" type="button">+ Agregar serial</button>
+                </div>
                 <label class="admin-field"><span>Responsable</span>
                     <input name="responsable" type="text" maxlength="120">
                 </label>

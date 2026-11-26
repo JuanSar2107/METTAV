@@ -87,7 +87,7 @@ def test_crear_articulo_con_campos_zona_franca(client, app, admin, imagen_png):
         assert articulo.codigo_interno == "MAQ-BOD-CO-001"
         assert articulo.grupo == "004"
         assert articulo.marca is None
-        assert articulo.subpartida == "8413.30.10.00"
+        assert articulo.subpartida == "8413301000"
         assert articulo.valor_fob_usd == Decimal("1200.00")
         assert articulo.procedencia == "Nacional"
         assert articulo.estado == "Para reparación"

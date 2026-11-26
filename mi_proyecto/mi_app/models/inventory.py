@@ -24,6 +24,8 @@ ORIGEN_REMISION = "Remisión"
 
 # Servicio que se le presta a la mercancía de clientes (grupo 004) y en qué va.
 TIPOS_SERVICIO = ("Mantenimiento", "Reparación", "Overhaul", "Fabricación", "Materia prima", "Otro")
+# Así se muestra el dueño de un activo propio (sin cliente).
+PROPIETARIO_EMPRESA = "Activo de la empresa"
 ESTADOS_SERVICIO = ("Recibido", "En servicio", "Terminado", "Entregado", "Cancelado")
 
 
@@ -213,7 +215,10 @@ class ArticuloInventario(db.Model):
     procedencia = db.Column(db.String(20))
     estado = db.Column(db.String(40))
     # Trazabilidad del activo (columnas del Excel de inventario).
+    # Seriales de las unidades, uno por línea; `serial` guarda un resumen corto
+    # (los primeros, separados por comas) para los listados y el Excel antiguo.
     serial = db.Column(db.String(80))
+    seriales = db.Column(db.Text)
     responsable = db.Column(db.String(120))
     fecha_ingreso = db.Column(db.Date)
     documento_soporte = db.Column(db.String(160))
@@ -238,6 +243,21 @@ class ArticuloInventario(db.Model):
     imagen_url = db.Column(db.String(500), nullable=False)
     imagen_url_2 = db.Column(db.String(500))
     imagen_url_3 = db.Column(db.String(500))
+
+    @property
+    def lista_seriales(self) -> list[str]:
+        """Todos los seriales del artículo (uno por unidad)."""
+        texto = self.seriales if self.seriales is not None else (self.serial or "")
+        return [linea.strip() for linea in texto.splitlines() if linea.strip()]
+
+    @property
+    def propietario(self) -> str:
+        """De quién es: el cliente, o la empresa si es un activo propio."""
+        if self.cliente:
+            return self.cliente
+        if self.grupo == "004":
+            return "Cliente sin indicar"
+        return PROPIETARIO_EMPRESA
 
     @property
     def imagenes(self) -> list[str]:
@@ -275,6 +295,8 @@ class MovimientoInventario(db.Model):
     # Por dónde se registró (ver ORIGENES_MOVIMIENTO) y la razón u observación.
     origen = db.Column(db.String(20))
     observaciones = db.Column(db.Text)
+    # En retiros: para qué o para quién se usó (p. ej. "Pruebas del control de Helicentro Perú").
+    destino = db.Column(db.String(160))
     # Solo en salidas por remisión.
     id_remision = db.Column(db.Integer, db.ForeignKey("remisiones.id"))
     remision = db.relationship("Remision")
@@ -308,6 +330,7 @@ class MovimientoInventario(db.Model):
             "proceso": self.salida.proceso if self.salida else None,
             "referencia": self.salida.referencia if self.salida else None,
             "origen": self.origen,
+            "destino": self.destino,
             "observaciones": self.observaciones,
             "id_remision": self.id_remision,
             "documento_nombre": self.documento_nombre,

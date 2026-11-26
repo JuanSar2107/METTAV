@@ -49,7 +49,7 @@ def _linea_articulo(a: ArticuloInventario) -> str:
     detalles = _detalles([
         ("interno", a.codigo_interno),
         ("marca", a.marca),
-        ("serial", a.serial),
+        ("seriales", ", ".join(a.lista_seriales)),
         ("subpartida", a.subpartida),
         ("FOB USD", a.valor_fob_usd),
         ("procedencia", a.procedencia),
@@ -59,7 +59,7 @@ def _linea_articulo(a: ArticuloInventario) -> str:
         ("documento", a.documento_soporte),
         ("retiro", a.fecha_retiro),
         ("razón retiro", a.razon_retiro),
-        ("cliente", a.cliente),
+        ("propietario", a.propietario),
         ("servicio", a.tipo_servicio),
         ("estado del servicio", a.estado_servicio),
     ])

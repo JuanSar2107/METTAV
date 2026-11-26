@@ -84,6 +84,14 @@ def _observaciones(datos) -> str | None:
     return texto or None
 
 
+def _destino(datos) -> str | None:
+    """Para qué o para quién se usó lo retirado (opcional)."""
+    texto = str(datos.get("destino") or "").strip()
+    if len(texto) > 160:
+        raise ErrorValidacion("El campo 'para qué se usó' no puede superar 160 caracteres.")
+    return texto or None
+
+
 def campos_servicio(datos) -> dict:
     """Cliente, tipo y estado del servicio (opcionales; para mercancía de clientes)."""
     cliente = str(datos.get("cliente") or "").strip()
@@ -95,6 +103,15 @@ def campos_servicio(datos) -> dict:
         raise ErrorValidacion("El tipo de servicio debe ser: " + ", ".join(TIPOS_SERVICIO) + ".")
     if estado and estado not in ESTADOS_SERVICIO:
         raise ErrorValidacion("El estado del servicio debe ser: " + ", ".join(ESTADOS_SERVICIO) + ".")
+    # Propietario (si el formulario lo trae): un activo de la empresa no tiene cliente
+    # ni servicio; la mercancía de un cliente debe decir de quién es.
+    propietario = str(datos.get("propietario") or "").strip().lower()
+    if propietario and propietario not in ("empresa", "cliente"):
+        raise ErrorValidacion("El propietario debe ser la empresa o un cliente.")
+    if propietario == "empresa":
+        cliente = tipo = estado = ""
+    elif propietario == "cliente" and not cliente:
+        raise ErrorValidacion("Escribe el nombre del cliente dueño del artículo.")
     return {"cliente": cliente or None, "tipo_servicio": tipo or None, "estado_servicio": estado or None}
 
 
@@ -452,7 +469,7 @@ def actualizar_articulo(id_articulo: int):
 _CAMPOS_ACTUALIZABLES = (
     "nombre", "descripcion", "categoria", "ubicacion", "codigo_interno", "grupo", "tipo",
     "marca", "subpartida", "valor_fob_usd", "procedencia", "estado",
-    "serial", "responsable", "fecha_ingreso", "documento_soporte",
+    "serial", "seriales", "responsable", "fecha_ingreso", "documento_soporte",
     "fecha_retiro", "documento_retiro", "razon_retiro",
 )
 
@@ -690,7 +707,7 @@ def actualizar_servicio(id_articulo: int):
             setattr(articulo, campo, valor)
         _auditar(_usuario_actual(), "Actualizar servicio", articulo.codigo, "; ".join(cambios))
         db.session.commit()
-    return jsonify(articulo={"id": articulo.id, **nuevos}, cambios=len(cambios))
+    return jsonify(articulo={"id": articulo.id, **nuevos, "propietario": articulo.propietario}, cambios=len(cambios))
 
 
 @inventario_bp.get("/movimientos")
@@ -730,7 +747,7 @@ def listar_movimientos():
         contenido = _sin_tildes(" ".join(str(v or "") for v in (
             m.tipo, m.empleado, m.usuario, m.articulo, m.codigo_articulo, m.categoria, m.operacion_sizfra,
             m.formulario, m.salida.referencia if m.salida else "", m.salida.proceso if m.salida else "",
-            m.observaciones, m.origen,
+            m.observaciones, m.origen, m.destino,
         )))
         return ((not texto or texto in contenido)
                 and (not categoria or m.categoria == categoria)
@@ -739,7 +756,7 @@ def listar_movimientos():
     movimientos = [m for m in movimientos if coincide(m)]
     encabezados = ["Fecha (hora Colombia)", "Tipo", "Código", "Artículo", "Categoría", "Cantidad", "Unidad",
                    "Operación Sizfra", "Formulario", "Origen", "Detalle", "Observaciones", "Empleado", "Usuario",
-                   "Documento soporte", "Estado", "Motivo de anulación"]
+                   "Documento soporte", "Estado", "Motivo de anulación", "Para qué se usó"]
 
     def detalle(m: MovimientoInventario) -> str:
         if m.salida:
@@ -749,7 +766,7 @@ def listar_movimientos():
 
     filas = [[hora_colombia(m.fecha_hora), m.tipo, m.codigo_articulo, m.articulo, m.categoria, m.cantidad, m.unidad,
               m.operacion_sizfra, m.formulario, m.origen, detalle(m), m.observaciones, m.empleado, m.usuario,
-              m.documento_nombre, "Anulado" if m.anulado_en else "Vigente", m.motivo_anulacion]
+              m.documento_nombre, "Anulado" if m.anulado_en else "Vigente", m.motivo_anulacion, m.destino]
              for m in movimientos]
     if formato == "xlsx":
         return respuesta_excel("Historial", encabezados, filas, "historial-movimientos")
@@ -758,7 +775,8 @@ def listar_movimientos():
         ["Fecha", "Tipo", "Código", "Artículo", "Cant.", "Sizfra", "Origen / detalle", "Observaciones", "Empleado"],
         [[f[0], f"{f[1]} (ANULADO)" if f[15] == "Anulado" else f[1], f[2], f[3], f"{f[5]} {f[6]}",
           " · ".join(x for x in (f[7] and f"Op. {f[7]}", f[8] and f"Form. {f[8]}") if x),
-          " · ".join(x for x in (f[9], f[10]) if x), f[11], f[12]] for f in filas],
+          " · ".join(x for x in (f[9], f[10]) if x),
+          " · ".join(x for x in (f[17] and f"Para: {f[17]}", f[11]) if x), f[12]] for f in filas],
         "historial-movimientos",
         anchos=[0.1, 0.06, 0.12, 0.19, 0.07, 0.11, 0.14, 0.13, 0.08],
         detalle=", ".join(filtros),
@@ -781,6 +799,7 @@ def retirar_articulo(id_articulo: int):
     try:
         sizfra = datos_sizfra(datos)
         observaciones = _observaciones(datos)
+        destino = _destino(datos)
     except ValueError as error:
         return jsonify(error=mensaje_seguro(error)), 400
 
@@ -821,6 +840,7 @@ def retirar_articulo(id_articulo: int):
         unidad=articulo.unidad,
         origen=ORIGEN_MANUAL,
         observaciones=observaciones,
+        destino=destino,
         **sizfra,
     )
     db.session.add(movimiento)
@@ -1144,6 +1164,8 @@ def trazabilidad_articulo(codigo: str):
             "stock": articulo.stock,
             "unidad": articulo.unidad,
             "serial": articulo.serial,
+            "seriales": articulo.lista_seriales,
+            "propietario": articulo.propietario,
             "responsable": articulo.responsable,
             "fecha_ingreso": articulo.fecha_ingreso.isoformat() if articulo.fecha_ingreso else None,
             "documento_soporte": articulo.documento_soporte,

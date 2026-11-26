@@ -3571,3 +3571,299 @@ body {
     }
 }
 
+
+/* Propietario del artículo en la tarjeta: cliente (naranja) o activo de la empresa (azul). */
+.item-owner {
+    display: inline-block;
+    max-width: 100%;
+    margin: -6px 0 12px;
+    padding: 2px 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #fff3e6;
+    color: #9a4d00;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-owner.is-company {
+    background: #e8f1f9;
+    color: #054a86;
+}
+
+.admin-field[hidden] {
+    display: none;
+}
+
+/* Lista de seriales: una casilla por unidad. */
+.serial-list-rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 8px;
+}
+
+.serial-list-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.serial-list-remove {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: #eef3f7;
+    color: #8a2f2f;
+    font: 700 18px/1 'Barlow', sans-serif;
+    cursor: pointer;
+}
+
+.serial-list-remove:hover,
+.serial-list-remove:focus-visible {
+    background: #fbe4e4;
+}
+
+.serial-list-remove[hidden] {
+    display: none;
+}
+
+.serial-list-add {
+    align-self: flex-start;
+    padding: 6px 12px;
+    border: 1px dashed #9fb6c7;
+    border-radius: 6px;
+    background: #f7fafc;
+    color: #054a86;
+    font: 600 13px 'Barlow', sans-serif;
+    cursor: pointer;
+}
+
+.serial-list-add:hover,
+.serial-list-add:focus-visible {
+    border-color: #054a86;
+    background: #eaf2f8;
+}
+
+/* Cambiar entre tarjetas e inventario general. */
+.view-toggle {
+    display: inline-flex;
+    flex: none;
+    padding: 3px;
+    border: 1px solid rgba(39, 71, 101, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.view-toggle-button {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #274765;
+    font: 600 13px 'Barlow', sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.view-toggle-button.is-active {
+    background: #054a86;
+    color: #fff;
+}
+
+.inventory-grid[hidden],
+.general-inventory[hidden],
+.general-detail[hidden] {
+    display: none;
+}
+
+/* Inventario general: tabla agrupada por artículo. */
+.general-inventory {
+    border: 1px solid rgba(39, 71, 101, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 30px rgba(9, 37, 64, 0.08);
+}
+
+.general-inventory-note {
+    margin: 0;
+    padding: 14px 18px 4px;
+    color: #526b80;
+    font-size: 13px;
+}
+
+.general-inventory-scroll {
+    overflow-x: auto;
+}
+
+.general-table,
+.general-units {
+    width: 100%;
+    border-collapse: collapse;
+    color: #194065;
+    font-size: 14px;
+}
+
+.general-table th {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(39, 71, 101, 0.16);
+    color: #526b80;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.general-row td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(39, 71, 101, 0.1);
+    vertical-align: top;
+}
+
+.general-row {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.general-row:hover,
+.general-row:focus-visible,
+.general-row[aria-expanded="true"] {
+    background: #f1f6fa;
+    outline: none;
+}
+
+.general-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+}
+
+.general-name strong::before {
+    display: inline-block;
+    width: 1em;
+    color: #4b9bd5;
+    content: "▸";
+    transition: transform 0.2s ease;
+}
+
+.general-row[aria-expanded="true"] .general-name strong::before {
+    transform: rotate(90deg);
+}
+
+.general-name small {
+    padding-left: 1em;
+    color: #6a8092;
+    font-size: 12px;
+}
+
+.general-total {
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.general-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.general-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px 3px 9px;
+    border-radius: 999px;
+    background: #fff3e6;
+    color: #9a4d00;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.general-chip strong {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    text-align: center;
+}
+
+.general-chips:not(:first-child) .general-chip,
+.general-row td:nth-child(4) .general-chip,
+.general-row td:nth-child(5) .general-chip {
+    background: #eef3f7;
+    color: #274765;
+}
+
+.general-row td:nth-child(3) .general-chip.is-company {
+    background: #e8f1f9;
+    color: #054a86;
+}
+
+.general-empty {
+    color: #8a9bab;
+    font-size: 12px;
+}
+
+.general-detail > td {
+    padding: 4px 14px 16px 32px;
+    border-bottom: 1px solid rgba(39, 71, 101, 0.14);
+    background: #f7fafc;
+}
+
+.general-units {
+    font-size: 13px;
+}
+
+.general-units th {
+    padding: 8px 10px;
+    color: #6a8092;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.general-units td {
+    padding: 8px 10px;
+    border-top: 1px solid rgba(39, 71, 101, 0.08);
+    vertical-align: top;
+}
+
+.general-serials {
+    max-width: 260px;
+    overflow-wrap: anywhere;
+}
+
+.general-open {
+    padding: 5px 10px;
+    border: 1px solid #054a86;
+    border-radius: 6px;
+    background: #fff;
+    color: #054a86;
+    font: 600 12px 'Barlow', sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.general-open:hover,
+.general-open:focus-visible {
+    background: #054a86;
+    color: #fff;
+}
+
+.item-details .item-details-full {
+    grid-column: 1 / -1;
+}
+
+.movement-destination {
+    color: #9a4d00;
+    font-weight: 600;
+}

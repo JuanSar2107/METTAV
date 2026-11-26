@@ -148,7 +148,7 @@ def test_asistente_admin_conoce_zona_franca_salidas_y_remisiones(
     assert "ZF-MAQ-CO-001 | Banco hidráulico | grupo 002" in contexto
     assert "interno MAQ-BOD-CO-001" in contexto
     assert "FOB USD 80.00" in contexto
-    assert "serial B-77" in contexto
+    assert "seriales B-77" in contexto
     # Salida integrada con su equipo y su parte.
     assert "Salida #1" in contexto
     assert "equipo: ZF-MAQ-CO-001 · Banco hidráulico" in contexto

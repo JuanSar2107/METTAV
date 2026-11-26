@@ -4,7 +4,7 @@ from flask import Blueprint, abort, current_app, jsonify, redirect, render_templ
 
 from mi_app.extensions import db
 from mi_app.security import cerrar_sesion_actual, usuario_actual
-from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, Usuario
+from mi_app.models import ArticuloInventario, Categoria, ConfiguracionSistema, MovimientoInventario, Usuario
 from mi_app.models.inventory import ESTADOS_SERVICIO, GRUPOS_INVENTARIO, PROCESOS_INTEGRACION, TIPOS_SERVICIO
 from mi_app.zona_franca import CATEGORIAS_SIGLA, TIPOS_CODIGO, UBICACIONES_SIGLA
 
@@ -139,6 +139,29 @@ def login():
     return render_template('login.html')
 
 
+def _ultimas_salidas() -> dict[str, str]:
+    """Código -> "2 unidades · 2026-11-18 10:30 · por Juan · para Helicentro Perú".
+
+    La salida más reciente (no anulada) de cada artículo: quién la hizo, cuándo y para qué.
+    """
+    from mi_app.routes.reports import hora_colombia
+
+    ultimos = (
+        db.session.query(db.func.max(MovimientoInventario.id))
+        .filter(MovimientoInventario.tipo == "Retiro", MovimientoInventario.anulado_en.is_(None))
+        .group_by(MovimientoInventario.codigo_articulo)
+    )
+    salidas = {}
+    for m in MovimientoInventario.query.filter(MovimientoInventario.id.in_(ultimos)):
+        partes = [f"{m.cantidad} {m.unidad}", hora_colombia(m.fecha_hora), f"por {m.empleado}"]
+        if m.destino:
+            partes.append(f"para {m.destino}")
+        elif m.remision is not None:
+            partes.append(f"{m.remision.numero} a {m.remision.cliente_nombre}")
+        salidas[m.codigo_articulo] = " · ".join(partes)
+    return salidas
+
+
 @main_bp.route('/dashboard')
 def dashboard():
     usuario = usuario_actual()
@@ -158,6 +181,7 @@ def dashboard():
         'dashboard.html',
         usuario=usuario,
         articulos=articulos,
+        ultimas_salidas=_ultimas_salidas(),
         categorias=categorias,
         grupos_inventario=GRUPOS_INVENTARIO,
         procesos_integracion=PROCESOS_INTEGRACION,

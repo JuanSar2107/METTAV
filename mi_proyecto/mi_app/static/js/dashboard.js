@@ -223,18 +223,187 @@
         const selectedCategory = categoryFilter instanceof HTMLSelectElement
             ? normalizeSearchText(categoryFilter.value.trim())
             : "";
+        const selectedOwner = ownerFilter instanceof HTMLSelectElement ? ownerFilter.value : "";
 
         cards.forEach((card) => {
-            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.internalCode || ""} ${card.dataset.category || ""} ${card.dataset.translated || ""}`);
+            const content = normalizeSearchText(`${card.dataset.name || ""} ${card.dataset.code || ""} ${card.dataset.internalCode || ""} ${card.dataset.category || ""} ${card.dataset.owner || ""} ${card.dataset.serials || ""} ${card.dataset.translated || ""}`);
             const cardCategory = normalizeSearchText((card.dataset.category || "").trim());
 
             const matchesQuery = !query || content.includes(query);
             const matchesCategory = !selectedCategory || cardCategory === selectedCategory;
+            const matchesOwner = !selectedOwner || card.dataset.owner === selectedOwner;
 
-            card.hidden = !(matchesQuery && matchesCategory);
+            card.hidden = !(matchesQuery && matchesCategory && matchesOwner);
         });
         updateResultsCount();
+        renderGeneral();
     };
+
+    // Inventario general: todo lo que hay en bodega agrupado por artículo, con de quién
+    // es cada unidad, en qué estado está y dónde. Usa los mismos filtros que las tarjetas.
+    const ownerFilter = document.querySelector("#owner-filter");
+    const inventoryGrid = document.querySelector("#inventory-grid");
+    const generalSection = document.querySelector("#general-inventory");
+    const generalBody = document.querySelector("#general-inventory-body");
+    const viewButtons = [...document.querySelectorAll(".view-toggle-button")];
+    let inventoryView = "cards";
+    const openGroups = new Set();
+
+    const chips = (conteo, vacio) => {
+        const lista = document.createElement("div");
+        lista.className = "general-chips";
+        const entradas = [...conteo.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"));
+        if (!entradas.length) {
+            const nada = document.createElement("span");
+            nada.className = "general-empty";
+            nada.textContent = vacio;
+            lista.append(nada);
+        }
+        entradas.forEach(([nombre, cantidad]) => {
+            const chip = document.createElement("span");
+            chip.className = "general-chip";
+            if (nombre === "Activo de la empresa") chip.classList.add("is-company");
+            const texto = document.createElement("span");
+            texto.textContent = nombre;
+            const numero = document.createElement("strong");
+            numero.textContent = cantidad;
+            chip.append(texto, numero);
+            lista.append(chip);
+        });
+        return lista;
+    };
+
+    const sumar = (conteo, clave, cantidad) => {
+        if (!clave || cantidad <= 0) return;
+        conteo.set(clave, (conteo.get(clave) || 0) + cantidad);
+    };
+
+    const celda = (fila, contenido, clase = "") => {
+        const td = document.createElement("td");
+        if (clase) td.className = clase;
+        if (contenido instanceof Node) td.append(contenido);
+        else td.textContent = contenido;
+        fila.append(td);
+        return td;
+    };
+
+    const detailTable = (grupo) => {
+        const tabla = document.createElement("table");
+        tabla.className = "general-units";
+        const cabecera = tabla.createTHead().insertRow();
+        ["Código", "De quién es", "Cantidad", "Estado del servicio", "Ubicación", "Responsable", "Seriales", ""].forEach((titulo) => {
+            const th = document.createElement("th");
+            th.scope = "col";
+            th.textContent = titulo;
+            cabecera.append(th);
+        });
+        const cuerpo = tabla.createTBody();
+        grupo.cards.forEach((card) => {
+            const fila = cuerpo.insertRow();
+            celda(fila, card.dataset.code);
+            celda(fila, card.dataset.owner || "");
+            celda(fila, `${card.dataset.stock} ${card.dataset.unit}`);
+            celda(fila, card.dataset.serviceStatus || "Sin estado");
+            celda(fila, card.dataset.location || "");
+            celda(fila, card.dataset.responsible || "—");
+            const seriales = JSON.parse(card.dataset.serials || "[]");
+            celda(fila, seriales.length ? seriales.join(", ") : "—", "general-serials");
+            const ver = document.createElement("button");
+            ver.type = "button";
+            ver.className = "general-open";
+            ver.textContent = "Ver artículo";
+            ver.addEventListener("click", () => openDetails(card));
+            celda(fila, ver);
+        });
+        return tabla;
+    };
+
+    function renderGeneral() {
+        if (!(generalBody instanceof HTMLElement) || inventoryView !== "general") return;
+        const grupos = new Map();
+        cards.filter((card) => !card.hidden).forEach((card) => {
+            const clave = normalizeSearchText((card.dataset.name || "").trim().replace(/\s+/g, " "));
+            if (!grupos.has(clave)) {
+                grupos.set(clave, {
+                    clave, nombre: card.dataset.name, categoria: card.dataset.category,
+                    unidad: card.dataset.unit, total: 0, cards: [],
+                    duenos: new Map(), estados: new Map(), ubicaciones: new Map(),
+                });
+            }
+            const grupo = grupos.get(clave);
+            const stock = Number(card.dataset.stock) || 0;
+            grupo.total += stock;
+            grupo.cards.push(card);
+            sumar(grupo.duenos, card.dataset.owner, stock);
+            sumar(grupo.estados, card.dataset.serviceStatus, stock);
+            sumar(grupo.ubicaciones, card.dataset.location, stock);
+        });
+
+        generalBody.replaceChildren();
+        [...grupos.values()]
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+            .forEach((grupo) => {
+                const abierto = openGroups.has(grupo.clave);
+                const fila = generalBody.insertRow();
+                fila.className = "general-row";
+                fila.tabIndex = 0;
+                fila.setAttribute("aria-expanded", String(abierto));
+                const nombre = document.createElement("div");
+                nombre.className = "general-name";
+                const titulo = document.createElement("strong");
+                titulo.textContent = grupo.nombre;
+                const sub = document.createElement("small");
+                sub.textContent = `${grupo.categoria} · ${grupo.cards.length} ${grupo.cards.length === 1 ? "registro" : "registros"}`;
+                nombre.append(titulo, sub);
+                celda(fila, nombre);
+                celda(fila, `${grupo.total} ${grupo.unidad}`, "general-total");
+                celda(fila, chips(grupo.duenos, "Sin unidades"));
+                celda(fila, chips(grupo.estados, "Sin estado"));
+                celda(fila, chips(grupo.ubicaciones, "—"));
+
+                const detalle = generalBody.insertRow();
+                detalle.className = "general-detail";
+                detalle.hidden = !abierto;
+                const td = celda(detalle, detailTable(grupo));
+                td.colSpan = 5;
+
+                const alternar = () => {
+                    const ahora = detalle.hidden;
+                    detalle.hidden = !ahora;
+                    fila.setAttribute("aria-expanded", String(ahora));
+                    if (ahora) openGroups.add(grupo.clave);
+                    else openGroups.delete(grupo.clave);
+                };
+                fila.addEventListener("click", alternar);
+                fila.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        alternar();
+                    }
+                });
+            });
+    }
+
+    const setInventoryView = (vista) => {
+        if (!(generalSection instanceof HTMLElement) || !(inventoryGrid instanceof HTMLElement)) return;
+        inventoryView = vista === "general" ? "general" : "cards";
+        generalSection.hidden = inventoryView !== "general";
+        inventoryGrid.hidden = inventoryView === "general";
+        viewButtons.forEach((boton) => {
+            const activo = boton.dataset.view === inventoryView;
+            boton.classList.toggle("is-active", activo);
+            boton.setAttribute("aria-pressed", String(activo));
+        });
+        try { sessionStorage.setItem("mettav_vista_inventario", inventoryView); } catch { /* sin almacenamiento */ }
+        renderGeneral();
+    };
+    viewButtons.forEach((boton) => boton.addEventListener("click", () => setInventoryView(boton.dataset.view)));
+    if (ownerFilter instanceof HTMLSelectElement) {
+        ownerFilter.addEventListener("change", applyFilters);
+    }
+    try {
+        if (sessionStorage.getItem("mettav_vista_inventario") === "general") setInventoryView("general");
+    } catch { /* sin almacenamiento */ }
 
     if (searchInput instanceof HTMLInputElement) {
         searchInput.addEventListener("input", applyFilters);
@@ -429,6 +598,91 @@
         };
     };
 
+    // Seriales: una casilla por unidad, con "+ Agregar serial" y una X para quitar.
+    // stockInput (opcional) solo sirve para mostrar "2 de 3 unidades".
+    const setupSerialList = (root, stockInput = null) => {
+        if (!(root instanceof HTMLElement)) return null;
+        const rows = root.querySelector(".serial-list-rows");
+        const count = root.querySelector(".serial-list-count");
+        const MAX_SERIALES = 500;
+
+        const removeButton = () => {
+            const quitar = document.createElement("button");
+            quitar.type = "button";
+            quitar.className = "serial-list-remove";
+            quitar.setAttribute("aria-label", "Quitar serial");
+            quitar.textContent = "×";
+            return quitar;
+        };
+
+        const renumber = () => {
+            const filas = [...rows.querySelectorAll(".serial-list-row")];
+            filas.forEach((fila, posicion) => {
+                const input = fila.querySelector("input");
+                input.placeholder = `Serial de la unidad ${posicion + 1}`;
+                input.setAttribute("aria-label", `Serial ${posicion + 1}`);
+                fila.querySelector(".serial-list-remove").hidden = filas.length === 1;
+            });
+            const llenos = filas.filter((fila) => fila.querySelector("input").value.trim()).length;
+            const stock = stockInput instanceof HTMLInputElement && stockInput.value !== "" ? Number(stockInput.value) : NaN;
+            count.textContent = Number.isFinite(stock) && stock > 0
+                ? `(${llenos} de ${stock} ${stock === 1 ? "unidad" : "unidades"})`
+                : (llenos ? `(${llenos})` : "");
+            root.querySelector(".serial-list-add").disabled = filas.length >= MAX_SERIALES;
+        };
+
+        const addRow = (value = "") => {
+            const fila = document.createElement("div");
+            fila.className = "serial-list-row";
+            const input = document.createElement("input");
+            input.name = "serial";
+            input.type = "text";
+            input.maxLength = 80;
+            input.autocomplete = "off";
+            input.value = value;
+            fila.append(input, removeButton());
+            rows.append(fila);
+            return input;
+        };
+
+        // La primera fila puede venir escrita en el HTML: se le agrega su X.
+        rows.querySelectorAll(".serial-list-row").forEach((fila) => {
+            if (!fila.querySelector(".serial-list-remove")) fila.append(removeButton());
+        });
+        if (!rows.querySelector(".serial-list-row")) addRow();
+
+        root.querySelector(".serial-list-add").addEventListener("click", () => {
+            addRow().focus();
+            renumber();
+        });
+        rows.addEventListener("click", (event) => {
+            const quitar = event.target.closest(".serial-list-remove");
+            if (!quitar) return;
+            quitar.closest(".serial-list-row").remove();
+            if (!rows.querySelector(".serial-list-row")) addRow();
+            renumber();
+        });
+        rows.addEventListener("input", renumber);
+        // Enter en un serial pasa al siguiente (o crea uno nuevo) en vez de enviar el formulario.
+        rows.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement)) return;
+            event.preventDefault();
+            const siguiente = event.target.closest(".serial-list-row").nextElementSibling;
+            (siguiente ? siguiente.querySelector("input") : addRow()).focus();
+            renumber();
+        });
+        stockInput?.addEventListener("input", renumber);
+        renumber();
+
+        return {
+            setValues(valores) {
+                rows.replaceChildren();
+                (valores.length ? valores : [""]).forEach((valor) => addRow(valor));
+                renumber();
+            },
+        };
+    };
+
     const addDialog = document.querySelector("#add-item-dialog");
     const addButton = document.querySelector("#open-add-item");
     const createForm = document.querySelector("#create-item-form");
@@ -449,6 +703,25 @@
         });
 
         setupImagePicker(document.querySelector("#new-item-images"));
+        setupSerialList(document.querySelector("#new-item-serials"), createForm.elements.stock);
+
+        // Propietario: con "Mercancía de un cliente" aparecen el cliente y el servicio.
+        const ownerSelect = createForm.elements.propietario;
+        const clientInput = createForm.elements.cliente;
+        const syncOwner = () => {
+            const esCliente = ownerSelect.value === "cliente";
+            createForm.querySelectorAll("[data-owner-client]").forEach((campo) => { campo.hidden = !esCliente; });
+            clientInput.required = esCliente;
+        };
+        ownerSelect.addEventListener("change", syncOwner);
+        // El grupo 004 de Sizfra es mercancía de clientes.
+        createForm.elements.grupo?.addEventListener("change", (event) => {
+            if (event.target.value === "004" && ownerSelect.value !== "cliente") {
+                ownerSelect.value = "cliente";
+                syncOwner();
+            }
+        });
+        syncOwner();
 
         createForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -1319,6 +1592,7 @@
         movementOperationInput.value = "";
         movementFormInput.value = "";
         movementNotesInput.value = "";
+        if (movementDestinationInput) movementDestinationInput.value = "";
         dialog.showModal();
         // Con la ventana ya visible se conoce el tamaño del recuadro de la imagen.
         window.requestAnimationFrame(() => {
@@ -1337,6 +1611,10 @@
             if (value && row.dataset.zfField === "groupName") {
                 value = `${card.dataset.group} · ${value}`;
             }
+            if (value && row.dataset.zfField === "serial") {
+                const seriales = JSON.parse(card.dataset.serials || "[]");
+                if (seriales.length > 1) value = `${seriales.length}: ${seriales.join(", ")}`;
+            }
             if (value && (row.dataset.zfField === "entryDate" || row.dataset.zfField === "exitDate")) {
                 value = formatDate(value);
             }
@@ -1354,10 +1632,11 @@
         const editMessage = document.querySelector("#edit-item-message");
         const editButton = document.querySelector("#edit-item-button");
         const editImagePicker = setupImagePicker(document.querySelector("#edit-item-images"));
+        const editSerials = setupSerialList(document.querySelector("#edit-item-serials"));
         const editFields = {
             nombre: "name", categoria: "category", descripcion: "description", unidad: "unit", ubicacion: "location",
             grupo: "group", marca: "brand", subpartida: "tariff", valor_fob_usd: "fob", procedencia: "origin",
-            estado: "condition", serial: "serial", responsable: "responsible", fecha_ingreso: "entryDate",
+            estado: "condition", responsable: "responsible", fecha_ingreso: "entryDate",
             documento_soporte: "entryDoc", fecha_retiro: "exitDate", documento_retiro: "exitDoc",
             razon_retiro: "exitReason", estado_servicio: "serviceStatus",
         };
@@ -1373,6 +1652,7 @@
             Object.entries(editFields).forEach(([field, key]) => {
                 editForm.elements[field].value = selectedCard.dataset[key] || "";
             });
+            editSerials?.setValues(JSON.parse(selectedCard.dataset.serials || "[]"));
             document.querySelector("#edit-item-code").textContent =
                 `Código ${selectedCard.dataset.code}. El código y el stock no se cambian aquí.`;
             editMessage.hidden = true;
@@ -1422,8 +1702,14 @@
                 });
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || "No se pudo guardar el servicio.");
-                const { cliente, tipo_servicio: tipo, estado_servicio: estado } = result.articulo;
+                const { cliente, tipo_servicio: tipo, estado_servicio: estado, propietario } = result.articulo;
                 selectedCard.dataset.client = cliente || "";
+                selectedCard.dataset.owner = propietario || "";
+                const ownerLabel = selectedCard.querySelector(".item-owner");
+                if (ownerLabel) {
+                    ownerLabel.textContent = propietario || "";
+                    ownerLabel.classList.toggle("is-company", !cliente && selectedCard.dataset.group !== "004");
+                }
                 selectedCard.dataset.serviceType = tipo || "";
                 selectedCard.dataset.serviceStatus = estado || "";
                 // Etiqueta del estado sobre la imagen de la tarjeta.
@@ -1460,10 +1746,12 @@
     const movementOperationInput = document.querySelector("#movement-operation");
     const movementFormInput = document.querySelector("#movement-form-number");
     const movementNotesInput = document.querySelector("#movement-notes");
+    const movementDestinationInput = document.querySelector("#movement-destination");
     const sizfraData = () => ({
         operacion_sizfra: movementOperationInput.value.trim(),
         formulario: movementFormInput.value.trim(),
         observaciones: movementNotesInput.value.trim(),
+        destino: movementDestinationInput ? movementDestinationInput.value.trim() : "",
     });
 
     const traceButton = document.querySelector("#open-trace");
@@ -1498,6 +1786,7 @@
                     evento.formulario ? `formulario ${evento.formulario}` : "",
                 ].filter(Boolean).join(", ");
                 if (sizfra) lines.push(`Sizfra: ${sizfra}`);
+                if (evento.destino) lines.push(`Para qué se usó: ${evento.destino}`);
                 if (evento.observaciones) lines.push(`Observaciones: ${evento.observaciones}`);
                 if (evento.anulado) {
                     title.textContent += " (ANULADO)";
@@ -1743,7 +2032,7 @@
             const searchableText = normalizeMovementText(
                 `${movimiento.tipo} ${movimiento.empleado} ${movimiento.usuario} ${movimiento.articulo} ${movimiento.codigo_articulo} ${movimiento.categoria} `
                 + `${movimiento.operacion_sizfra || ""} ${movimiento.formulario || ""} ${movimiento.referencia || ""} ${movimiento.proceso || ""} `
-                + `${movimiento.observaciones || ""} ${movimiento.origen || ""}`,
+                + `${movimiento.observaciones || ""} ${movimiento.destino || ""} ${movimiento.origen || ""}`,
             );
             const movementDate = localDateKey(movimiento.fecha_hora);
             return (!query || searchableText.includes(query))
@@ -1806,6 +2095,12 @@
                 const origin = document.createElement("small");
                 origin.textContent = movimiento.origen;
                 typeCell.append(origin);
+            }
+            if (movimiento.destino) {
+                const destination = document.createElement("small");
+                destination.className = "movement-notes movement-destination";
+                destination.textContent = `Para: ${movimiento.destino}`;
+                articleCell.append(destination);
             }
             if (movimiento.observaciones) {
                 const notes = document.createElement("small");

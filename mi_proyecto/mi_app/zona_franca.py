@@ -42,7 +42,8 @@ TIPOS_CODIGO = ("CO", "PR", "AR")
 
 _RE_CODIGO_ZF = re.compile(r"^ZF-([A-Z]+)-([A-Z]+)-(\d+)$")
 _RE_CODIGO = re.compile(r"^[A-Z0-9][A-Z0-9-]*$")
-_RE_SUBPARTIDA = re.compile(r"^\d{4}(\.?\d{2}){0,3}$")
+# Subpartida arancelaria: de 4 a 11 dígitos; los puntos y espacios son opcionales.
+_RE_SUBPARTIDA = re.compile(r"^\d{4,11}$")
 _RE_MILES = re.compile(r"^\d{1,3}(\.\d{3})+$")
 _RE_UNIDADES = re.compile(r"\((\d+)\s*(?:und|unds|unidades)\.?\)", re.IGNORECASE)
 
@@ -89,7 +90,7 @@ def campos_zona_franca(datos) -> dict:
     grupo = _texto(datos.get("grupo"))
     tipo = _texto(datos.get("tipo")).upper()
     marca = _texto(datos.get("marca"))
-    subpartida = _texto(datos.get("subpartida"))
+    subpartida = re.sub(r"[.\s]", "", _texto(datos.get("subpartida")))
     procedencia = _texto(datos.get("procedencia")).capitalize()
     estado = _texto(datos.get("estado"))
 
@@ -104,7 +105,7 @@ def campos_zona_franca(datos) -> dict:
     if marca.upper() == "N/A":
         marca = ""
     if subpartida and not _RE_SUBPARTIDA.match(subpartida):
-        raise ErrorValidacion("La subpartida arancelaria debe tener el formato 8413.30.10.00.")
+        raise ErrorValidacion("La subpartida arancelaria debe tener de 4 a 11 números (con o sin puntos), p. ej. 8413301000.")
     if procedencia and procedencia not in PROCEDENCIAS:
         raise ErrorValidacion("La procedencia debe ser Nacional o Extranjera.")
     if len(estado) > 40:
@@ -157,12 +158,9 @@ def leer_fecha(valor) -> date | None:
 
 
 def campos_trazabilidad(datos) -> dict:
-    """Valida serial, responsable, fechas y documentos soporte (todos opcionales)."""
-    serial = _texto(datos.get("serial"))
-    if serial.upper() == "N/A":
-        serial = ""
+    """Valida seriales, responsable, fechas y documentos soporte (todos opcionales)."""
+    seriales = leer_seriales(datos)
     textos = {
-        "serial": (serial, 80),
         "responsable": (_texto(datos.get("responsable")), 120),
         "documento_soporte": (_texto(datos.get("documento_soporte")), 160),
         "documento_retiro": (_texto(datos.get("documento_retiro")), 160),
@@ -175,7 +173,51 @@ def campos_trazabilidad(datos) -> dict:
         campos[campo] = valor or None
     campos["fecha_ingreso"] = leer_fecha(datos.get("fecha_ingreso"))
     campos["fecha_retiro"] = leer_fecha(datos.get("fecha_retiro"))
+    campos["seriales"] = "\n".join(seriales) or None
+    campos["serial"] = resumen_seriales(seriales)
     return campos
+
+
+_MAX_SERIALES = 500
+_RE_SEPARADOR_SERIALES = re.compile(r"[\n;,]")
+
+
+def leer_seriales(datos) -> list[str]:
+    """Los seriales de un formulario (varias casillas 'serial') o de una celda
+    ('A1, A2; A3'). Quita vacíos, 'N/A' y repetidos, y valida el largo."""
+    if hasattr(datos, "getlist"):
+        valores = datos.getlist("serial")
+    else:
+        valores = [datos.get("serial")]
+    seriales, vistos = [], set()
+    for valor in valores:
+        for parte in _RE_SEPARADOR_SERIALES.split(_texto(valor)):
+            serial = parte.strip()
+            if not serial or serial.upper() == "N/A" or serial.upper() in vistos:
+                continue
+            if len(serial) > 80:
+                raise ErrorValidacion("Cada serial puede tener máximo 80 caracteres.")
+            vistos.add(serial.upper())
+            seriales.append(serial)
+    if len(seriales) > _MAX_SERIALES:
+        raise ErrorValidacion(f"Se admiten máximo {_MAX_SERIALES} seriales por artículo.")
+    return seriales
+
+
+def resumen_seriales(seriales: list[str]) -> str | None:
+    """'A1, A2 y 3 más': cabe en la columna corta 'serial'."""
+    if not seriales:
+        return None
+    texto = ""
+    for posicion, serial in enumerate(seriales):
+        siguiente = serial if not texto else f"{texto}, {serial}"
+        restantes = len(seriales) - posicion - 1
+        cola = f" y {restantes} más" if restantes else ""
+        if len(siguiente + cola) > 80:
+            faltan = len(seriales) - posicion
+            return (f"{texto} y {faltan} más" if texto else serial[:70] + f" y {faltan - 1} más")[:80]
+        texto = siguiente
+    return texto
 
 
 def siguiente_consecutivo(categoria: str, tipo: str) -> int:
