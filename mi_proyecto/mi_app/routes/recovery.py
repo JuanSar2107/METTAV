@@ -15,6 +15,7 @@ import secrets
 import time
 
 from flask import Blueprint, current_app, jsonify, render_template, request
+from markupsafe import escape
 from sqlalchemy import or_
 
 from mi_app import correo, totp
@@ -65,6 +66,39 @@ def _url_base() -> str | None:
     return None
 
 
+def _correo_html(titulo: str, saludo: str, parrafos: list[str], boton: tuple[str, str] | None = None) -> str:
+    """Correo con los colores de METTAV. Solo estilos en línea: los programas de correo ignoran los demás."""
+    contenido = "".join(
+        f'<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#1f3b57;">{escape(texto)}</p>'
+        for texto in parrafos
+    )
+    if boton:
+        texto_boton, enlace = boton
+        contenido += (
+            '<p style="margin:22px 0;text-align:center;">'
+            f'<a href="{escape(enlace)}" style="display:inline-block;padding:13px 26px;border-radius:8px;'
+            'background:#054a86;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;">'
+            f"{escape(texto_boton)}</a></p>"
+            '<p style="margin:0 0 14px;font-size:12px;line-height:1.5;color:#526b80;">'
+            "Si el botón no funciona, copia este enlace en tu navegador:<br>"
+            f'<a href="{escape(enlace)}" style="color:#054a86;word-break:break-all;">{escape(enlace)}</a></p>'
+        )
+    return (
+        '<!doctype html><html lang="es"><body style="margin:0;padding:24px 12px;background:#edf3f7;'
+        'font-family:Arial,Helvetica,sans-serif;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;'
+        'margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #d5e1ea;">'
+        '<tr><td style="background:#054a86;padding:22px 28px;color:#ffffff;border-radius:12px 12px 0 0;">'
+        '<div style="font-size:24px;font-weight:bold;letter-spacing:1px;">METTAV</div>'
+        '<div style="font-size:11px;letter-spacing:3px;">GROUP SAS</div></td></tr>'
+        f'<tr><td style="padding:28px;"><h1 style="margin:0 0 16px;font-size:20px;color:#054a86;">{escape(titulo)}</h1>'
+        f'<p style="margin:0 0 14px;font-size:15px;color:#1f3b57;">{escape(saludo)}</p>{contenido}</td></tr>'
+        '<tr><td style="padding:16px 28px;background:#f4f8fb;font-size:11px;color:#6a8092;border-radius:0 0 12px 12px;">'
+        "Mensaje automático del sistema de inventario de METTAV Group S.A.S. No respondas a este correo."
+        "</td></tr></table></body></html>"
+    )
+
+
 def _enviar_enlace(usuario: Usuario) -> None:
     base = _url_base()
     if base is None:
@@ -87,14 +121,23 @@ def _enviar_enlace(usuario: Usuario) -> None:
         if os.environ.get("MAIL_CONSOLA") == "1":  # solo para pruebas locales
             current_app.logger.warning("Enlace de recuperación (solo pruebas): %s", enlace)
         return
+    nombre = usuario.nombre_completo or usuario.usuario
     correo.enviar_en_segundo_plano(
         usuario.correo,
         "Restablece tu contraseña de METTAV",
-        f"Hola {usuario.nombre_completo or usuario.usuario},\n\n"
+        f"Hola {nombre},\n\n"
         "Recibimos una solicitud para cambiar la contraseña de tu cuenta de METTAV.\n"
         f"Abre este enlace para elegir una contraseña nueva (vale 30 minutos y solo se puede usar una vez):\n\n"
         f"{enlace}\n\n"
         "Si no fuiste tú, ignora este mensaje: tu contraseña actual sigue funcionando.\n",
+        _correo_html(
+            "Restablece tu contraseña",
+            f"Hola {nombre},",
+            ["Recibimos una solicitud para cambiar la contraseña de tu cuenta del sistema de inventario de METTAV.",
+             "Pulsa el botón para elegir una contraseña nueva. El enlace vale 30 minutos y solo se puede usar una vez.",
+             "Si no fuiste tú, ignora este mensaje: tu contraseña actual sigue funcionando."],
+            ("Elegir contraseña nueva", enlace),
+        ),
     )
 
 
@@ -194,5 +237,11 @@ def restablecer_contrasena():
             "Tu contraseña de METTAV fue cambiada",
             "La contraseña de tu cuenta de METTAV se cambió con el enlace enviado a este correo.\n"
             "Si no fuiste tú, avisa de inmediato al administrador.\n",
+            _correo_html(
+                "Tu contraseña fue cambiada",
+                f"Hola {usuario.nombre_completo or usuario.usuario},",
+                ["La contraseña de tu cuenta de METTAV se cambió con el enlace enviado a este correo.",
+                 "Si no fuiste tú, avisa de inmediato al administrador del sistema."],
+            ),
         )
     return jsonify(mensaje="Contraseña actualizada. Ya puedes iniciar sesión.")

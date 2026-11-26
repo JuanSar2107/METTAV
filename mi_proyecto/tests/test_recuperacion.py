@@ -15,7 +15,8 @@ def buzon(monkeypatch):
     """Simula el servidor SMTP: guarda los correos en una lista."""
     enviados = []
     monkeypatch.setattr(correo, "configurado", lambda: True)
-    monkeypatch.setattr(correo, "enviar", lambda destino, asunto, texto: enviados.append((destino, asunto, texto)))
+    monkeypatch.setattr(correo, "enviar",
+                        lambda destino, asunto, texto, html=None: enviados.append((destino, asunto, texto, html)))
     return enviados
 
 
@@ -32,7 +33,7 @@ def test_pedir_enlace_envia_correo_al_correo_registrado(client, creador_usuarios
     respuesta = _pedir(client, "ana")
     assert respuesta.status_code == 200
     assert len(buzon) == 1
-    destino, asunto, texto = buzon[0]
+    destino, asunto, texto, _html = buzon[0]
     assert destino == "ana@correo.com" and "contraseña" in asunto.lower()
     assert _enlace(buzon) is not None
 
@@ -180,3 +181,48 @@ def test_la_pagina_de_restablecer_no_se_guarda_en_cache(client):
 def test_el_login_enlaza_a_la_recuperacion(client):
     assert "/recuperar" in client.get("/").get_data(as_text=True)
     assert client.get("/recuperar").status_code == 200
+
+
+def test_el_correo_tiene_boton_y_es_seguro(client, creador_usuarios, buzon):
+    creador_usuarios("ana", correo="ana@ejemplo.com", nombre_completo="Ana <b>Gómez</b>")
+    client.post("/api/recuperar", json={"identificador": "ana"})
+    _destino, asunto, texto, html = buzon[-1]
+    token = _enlace(buzon).group(1)
+    assert asunto == "Restablece tu contraseña de METTAV"
+    assert "METTAV" in html and "Elegir contraseña nueva" in html
+    assert f"/restablecer/{token}" in html
+    # El nombre lo escribe la persona: se muestra como texto, nunca como HTML.
+    assert "<b>Gómez</b>" not in html and "&lt;b&gt;Gómez&lt;/b&gt;" in html
+
+
+def test_el_remitente_se_llama_mettav(monkeypatch):
+    enviados = []
+
+    class ServidorFalso:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, usuario, clave):
+            pass
+
+        def send_message(self, mensaje):
+            enviados.append(mensaje)
+
+    monkeypatch.setattr(correo.smtplib, "SMTP", ServidorFalso)
+    monkeypatch.setenv("SMTP_HOST", "smtp.ejemplo.com")
+    monkeypatch.setenv("SMTP_USER", "inventario@mettav.com")
+    monkeypatch.delenv("SMTP_FROM", raising=False)
+    correo.enviar("ana@ejemplo.com", "Prueba", "Hola", "<p>Hola</p>")
+    mensaje = enviados[0]
+    assert mensaje["From"] == "METTAV <inventario@mettav.com>"
+    assert mensaje.get_body(("html",)).get_content().strip() == "<p>Hola</p>"
+    assert mensaje.get_body(("plain",)).get_content().strip() == "Hola"
