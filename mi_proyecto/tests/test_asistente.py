@@ -275,3 +275,45 @@ def test_asistente_responde_en_el_idioma_de_la_interfaz(client, creador_usuarios
     assert client.post("/api/asistente/", json={"pregunta": "Hola"}).status_code == 200
     assert "Responde siempre en inglés" in instrucciones[0]
     assert "Responde siempre en español" in instrucciones[1]
+
+
+def test_consultar_gemini_distingue_demora_de_conexion(monkeypatch, con_clave, caplog):
+    def _demora(peticion, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _demora)
+    with pytest.raises(gemini.GeminiError, match="tardó demasiado"):
+        gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+
+    def _demora_al_conectar(peticion, timeout):
+        raise urllib.error.URLError(TimeoutError("timed out"))
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _demora_al_conectar)
+    with pytest.raises(gemini.GeminiError, match="tardó demasiado"):
+        gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+
+    def _sin_red(peticion, timeout):
+        raise urllib.error.URLError(OSError(-3, "Temporary failure in name resolution"))
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _sin_red)
+    with caplog.at_level("WARNING"):
+        with pytest.raises(gemini.GeminiError, match="No se pudo conectar"):
+            gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+    assert "Temporary failure in name resolution" in caplog.text
+
+
+def test_tiempo_de_espera_configurable(monkeypatch, con_clave):
+    usados = []
+
+    def _urlopen(peticion, timeout):
+        usados.append(timeout)
+        cuerpo = {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+        return _RespuestaFalsa(json.dumps(cuerpo).encode("utf-8"))
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+    monkeypatch.setenv("GEMINI_TIMEOUT", "120")
+    gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+    monkeypatch.setenv("GEMINI_TIMEOUT", "no-es-numero")
+    gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
+    assert usados == [60, 120, 60]

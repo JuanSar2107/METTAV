@@ -614,8 +614,17 @@
         </svg>
     </button>
     <div class="dialog-layout">
-        <div class="dialog-gallery">
-            <img class="dialog-image" id="dialog-image" alt="">
+        <div class="dialog-gallery" id="dialog-gallery">
+            <div class="dialog-track" id="dialog-track">
+                <div class="dialog-slide"><img class="dialog-image" id="dialog-image" alt=""></div>
+            </div>
+            <button class="dialog-arrow dialog-arrow--prev" id="dialog-prev" type="button" aria-label="Imagen anterior" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            </button>
+            <button class="dialog-arrow dialog-arrow--next" id="dialog-next" type="button" aria-label="Imagen siguiente" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+            </button>
+            <span class="dialog-counter" id="dialog-counter" aria-live="polite" hidden></span>
             <div class="dialog-thumbs" id="dialog-thumbs" hidden></div>
         </div>
         <div class="dialog-content">
@@ -1246,17 +1255,18 @@
                     </select>
                 </label>
                 <p class="admin-field--full admin-form-section">Imágenes del artículo (opcionales, hasta 3)</p>
-                <div class="admin-field--full image-slots">
+                <div class="admin-field--full image-picker" id="new-item-images">
                     {% for n in [1, 2, 3] %}
-                    <div class="image-slot">
-                        <label class="admin-field"><span>Imagen {{ n }}{% if n == 1 %} (principal){% endif %}</span>
-                            <input id="new-item-image-{{ n }}" name="imagen{% if n > 1 %}_{{ n }}{% endif %}" type="file" accept="image/jpeg,image/png,image/webp">
-                        </label>
-                        <img id="new-item-preview-{{ n }}" alt="Vista previa de la imagen {{ n }}" hidden>
-                        <span class="image-slot-name" id="new-item-file-name-{{ n }}">Sin imagen.</span>
-                    </div>
+                    <input class="image-picker-input" name="imagen{% if n > 1 %}_{{ n }}{% endif %}" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                     {% endfor %}
-                    <small class="image-slots-help">JPEG, PNG o WEBP; máximo 5 MB cada una. Sin imágenes se usa la de la bodega.</small>
+                    <div class="image-picker-list"></div>
+                    <button class="image-picker-add" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                        <span>Agregar imagen</span>
+                        <small class="image-picker-count">0 de 3</small>
+                    </button>
+                    <p class="image-picker-message" role="status" aria-live="polite" hidden></p>
+                    <small class="image-slots-help">JPEG, PNG o WEBP; máximo 5 MB cada una. La primera es la principal. Sin imágenes se usa la de la bodega.</small>
                 </div>
             </div>
             <p class="dialog-message" id="create-item-message" role="status" aria-live="polite" hidden></p>
@@ -1297,18 +1307,19 @@
                     <input name="ubicacion" type="text" maxlength="80">
                 </label>
                 <p class="admin-field--full admin-form-section">Imágenes del artículo (opcionales, hasta 3)</p>
-                <div class="admin-field--full image-slots">
+                <div class="admin-field--full image-picker" id="edit-item-images">
                     {% for n in [1, 2, 3] %}
-                    <div class="image-slot">
-                        <label class="admin-field"><span>Imagen {{ n }}{% if n == 1 %} (principal){% endif %}</span>
-                            <input id="edit-item-image-{{ n }}" name="imagen{% if n > 1 %}_{{ n }}{% endif %}" type="file" accept="image/jpeg,image/png,image/webp">
-                        </label>
-                        <img id="edit-item-preview-{{ n }}" alt="Vista previa de la imagen {{ n }}" hidden>
-                        <span class="image-slot-name" id="edit-item-file-name-{{ n }}">Sin imagen.</span>
-                        <label class="image-slot-remove" id="edit-item-remove-{{ n }}" hidden><input name="quitar_imagen_{{ n }}" type="checkbox" value="1"> Quitar esta imagen</label>
-                    </div>
+                    <input class="image-picker-input" name="imagen{% if n > 1 %}_{{ n }}{% endif %}" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <input class="image-picker-remove" name="quitar_imagen_{{ n }}" type="checkbox" value="1" hidden>
                     {% endfor %}
-                    <small class="image-slots-help">JPEG, PNG o WEBP; máximo 5 MB cada una. Si no eliges una, se conserva la actual.</small>
+                    <div class="image-picker-list"></div>
+                    <button class="image-picker-add" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                        <span>Agregar imagen</span>
+                        <small class="image-picker-count">0 de 3</small>
+                    </button>
+                    <p class="image-picker-message" role="status" aria-live="polite" hidden></p>
+                    <small class="image-slots-help">JPEG, PNG o WEBP; máximo 5 MB cada una. La primera es la principal. Las que no quites se conservan.</small>
                 </div>
                 <p class="admin-field--full admin-form-section">Datos de zona franca</p>
                 <label class="admin-field"><span>Grupo de inventario</span>

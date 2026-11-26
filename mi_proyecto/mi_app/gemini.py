@@ -6,6 +6,7 @@ así no se agrega ningún SDK a la imagen Docker.
 Variables de entorno:
     GEMINI_API_KEY -> clave de Google AI Studio (https://aistudio.google.com/apikey)
     GEMINI_MODEL   -> modelo a usar (por defecto: gemini-3.5-flash)
+    GEMINI_TIMEOUT -> segundos máximos de espera por una respuesta (por defecto: 60)
 """
 
 import json
@@ -20,7 +21,14 @@ _log = logging.getLogger(__name__)
 
 MODELO_POR_DEFECTO = "gemini-3.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
-_TIEMPO_MAXIMO = 45
+_TIEMPO_POR_DEFECTO = 60
+
+
+def _tiempo_maximo() -> int:
+    try:
+        return min(max(int(os.environ.get("GEMINI_TIMEOUT") or _TIEMPO_POR_DEFECTO), 10), 240)
+    except ValueError:
+        return _TIEMPO_POR_DEFECTO
 
 
 class GeminiError(ErrorValidacion):
@@ -61,11 +69,19 @@ def consultar_gemini(instrucciones: str, mensajes: list[dict]) -> str:
     )
 
     try:
-        with urllib.request.urlopen(peticion, timeout=_TIEMPO_MAXIMO) as respuesta:
+        with urllib.request.urlopen(peticion, timeout=_tiempo_maximo()) as respuesta:
             datos = json.loads(respuesta.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         raise GeminiError(_mensaje_error_http(error)) from error
-    except (urllib.error.URLError, TimeoutError) as error:
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        # Se distingue "tardó demasiado" de "no hay conexión", y el motivo exacto va al log.
+        motivo = getattr(error, "reason", error)
+        if isinstance(motivo, TimeoutError) or isinstance(error, TimeoutError):
+            _log.warning("Gemini no respondió en %s s (modelo %s).", _tiempo_maximo(), modelo)
+            raise GeminiError(
+                "Gemini tardó demasiado en responder. Inténtalo de nuevo en un momento."
+            ) from error
+        _log.warning("No se pudo conectar con Gemini (modelo %s): %r", modelo, motivo)
         raise GeminiError("No se pudo conectar con Gemini. Revisa la conexión a internet.") from error
     except json.JSONDecodeError as error:
         raise GeminiError("Gemini devolvió una respuesta no válida.") from error

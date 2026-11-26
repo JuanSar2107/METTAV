@@ -78,7 +78,7 @@
             (image.naturalWidth / image.naturalHeight) / (box.clientWidth / box.clientHeight),
         ));
         // En el detalle la foto debe verse completa: solo llena el recuadro si casi no se recorta.
-        const tolerance = image.id === "dialog-image" ? 0.05 : 0.18;
+        const tolerance = image.closest(".dialog-gallery") ? 0.05 : 0.18;
         const contained = !isDefault && difference > tolerance;
         image.classList.toggle("is-contained", contained);
         box.classList.toggle("has-warehouse-backdrop", contained);
@@ -99,7 +99,7 @@
     window.addEventListener("resize", () => {
         window.clearTimeout(resizeTimer);
         resizeTimer = window.setTimeout(() => {
-            document.querySelectorAll(".item-image, #dialog-image").forEach(fitImage);
+            document.querySelectorAll(".item-image, .dialog-image").forEach(fitImage);
         }, 150);
     });
 
@@ -326,6 +326,109 @@
     };
     setupFilePreview("#stock-entry-document", "#stock-entry-document-preview", "#stock-entry-document-name");
 
+    // Selector de fotos: un solo botón que se usa hasta 3 veces; cada foto con una X para quitarla.
+    // Por dentro sigue habiendo 3 casillas (imagen, imagen_2, imagen_3): el servidor no cambia.
+    const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+    const setupImagePicker = (root) => {
+        if (!(root instanceof HTMLElement)) return null;
+        const inputs = [...root.querySelectorAll(".image-picker-input")];
+        const removes = [...root.querySelectorAll(".image-picker-remove")];
+        const list = root.querySelector(".image-picker-list");
+        const addButton = root.querySelector(".image-picker-add");
+        const count = root.querySelector(".image-picker-count");
+        const message = root.querySelector(".image-picker-message");
+        let existing = ["", "", ""];
+        let previews = [null, null, null];
+
+        const isUsed = (i) => Boolean(inputs[i].files.length) || Boolean(existing[i] && !removes[i]?.checked);
+        const showMessage = (text) => {
+            message.textContent = text;
+            message.hidden = !text;
+        };
+
+        const render = () => {
+            previews.forEach((url) => url && URL.revokeObjectURL(url));
+            previews = [null, null, null];
+            const items = [];
+            inputs.forEach((input, i) => {
+                let src = "";
+                let label = "";
+                if (input.files.length) {
+                    src = URL.createObjectURL(input.files[0]);
+                    previews[i] = src;
+                    label = input.files[0].name;
+                } else if (existing[i] && !removes[i]?.checked) {
+                    src = existing[i];
+                    label = "Imagen actual";
+                }
+                if (!src) return;
+                const item = document.createElement("figure");
+                item.className = "image-picker-item";
+                const picture = document.createElement("img");
+                picture.src = src;
+                picture.alt = label;
+                const caption = document.createElement("figcaption");
+                caption.textContent = label;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "image-picker-remove-button";
+                remove.setAttribute("aria-label", "Quitar imagen");
+                remove.title = "Quitar imagen";
+                remove.textContent = "×";
+                remove.addEventListener("click", () => {
+                    if (input.files.length) input.value = "";
+                    else if (removes[i]) removes[i].checked = true;
+                    showMessage("");
+                    render();
+                });
+                item.append(picture, caption, remove);
+                items.push(item);
+            });
+            if (items.length) {
+                const badge = document.createElement("span");
+                badge.className = "image-picker-main";
+                badge.textContent = "Principal";
+                items[0].append(badge);
+            }
+            list.replaceChildren(...items);
+            const used = inputs.filter((_input, i) => isUsed(i)).length;
+            count.textContent = `${used} de 3`;
+            addButton.hidden = used >= 3;
+        };
+
+        addButton.addEventListener("click", () => {
+            const free = inputs.findIndex((_input, i) => !isUsed(i));
+            if (free >= 0) inputs[free].click();
+        });
+        inputs.forEach((input) => {
+            input.addEventListener("change", () => {
+                const file = input.files[0];
+                if (file && file.size > MAX_IMAGE_BYTES) {
+                    input.value = "";
+                    showMessage("La imagen supera el límite de 5 MB. Elige otra.");
+                } else if (file && !file.type.startsWith("image/")) {
+                    input.value = "";
+                    showMessage("El archivo debe ser una imagen JPEG, PNG o WEBP.");
+                } else {
+                    showMessage("");
+                }
+                render();
+            });
+        });
+        root.closest("form")?.addEventListener("reset", () => window.setTimeout(render));
+
+        render();
+        return {
+            setExisting(srcs) {
+                existing = [0, 1, 2].map((i) => srcs[i] || "");
+                inputs.forEach((input) => { input.value = ""; });
+                removes.forEach((remove) => { remove.checked = false; });
+                showMessage("");
+                render();
+            },
+        };
+    };
+
     const addDialog = document.querySelector("#add-item-dialog");
     const addButton = document.querySelector("#open-add-item");
     const createForm = document.querySelector("#create-item-form");
@@ -345,7 +448,7 @@
             }
         });
 
-        [1, 2, 3].forEach((n) => setupFilePreview(`#new-item-image-${n}`, `#new-item-preview-${n}`, `#new-item-file-name-${n}`));
+        setupImagePicker(document.querySelector("#new-item-images"));
 
         createForm.addEventListener("submit", async (event) => {
             event.preventDefault();
@@ -1091,27 +1194,107 @@
         message.hidden = false;
     };
 
-    const openDetails = (card) => {
-        selectedCard = card;
-        detailImage.src = card.dataset.image;
-        detailImage.dataset.fallback = card.querySelector(".item-image").dataset.fallback;
-        detailImage.alt = card.dataset.name;
-        const photos = JSON.parse(card.dataset.images || "[]");
-        detailThumbs.replaceChildren(...photos.map((src, index) => {
+    // Carrusel de la ficha: flechas, miniaturas, deslizamiento y avance automático cada 15 s.
+    const detailTrack = document.querySelector("#dialog-track");
+    const detailPrev = document.querySelector("#dialog-prev");
+    const detailNext = document.querySelector("#dialog-next");
+    const detailCounter = document.querySelector("#dialog-counter");
+    const AUTOPLAY_MS = 15000;
+    let slideIndex = 0;
+    let slideCount = 1;
+    let autoplayTimer = null;
+
+    const stopAutoplay = () => {
+        window.clearInterval(autoplayTimer);
+        autoplayTimer = null;
+    };
+    const restartAutoplay = () => {
+        stopAutoplay();
+        if (slideCount > 1 && dialog.open) {
+            autoplayTimer = window.setInterval(() => showSlide(slideIndex + 1), AUTOPLAY_MS);
+        }
+    };
+    function showSlide(index, animate = true) {
+        slideIndex = (index + slideCount) % slideCount;
+        detailTrack.classList.toggle("is-instant", !animate);
+        detailTrack.style.transform = `translateX(-${slideIndex * 100}%)`;
+        detailTrack.querySelectorAll(".dialog-slide").forEach((slide, i) => {
+            slide.classList.toggle("is-active", i === slideIndex);
+        });
+        detailCounter.textContent = `${slideIndex + 1} / ${slideCount}`;
+        detailThumbs.querySelectorAll(".dialog-thumb").forEach((thumb, i) => {
+            thumb.classList.toggle("is-active", i === slideIndex);
+            thumb.setAttribute("aria-current", i === slideIndex ? "true" : "false");
+        });
+        restartAutoplay();
+    }
+
+    const buildCarousel = (sources, name, fallback) => {
+        stopAutoplay();
+        // La primera diapositiva es la imagen de siempre (#dialog-image); las demás se crean aquí.
+        detailTrack.querySelectorAll(".dialog-slide:not(:first-child)").forEach((slide) => slide.remove());
+        detailImage.dataset.fallback = fallback;
+        detailImage.src = sources[0];
+        detailImage.alt = name;
+        sources.slice(1).forEach((src, i) => {
+            const slide = document.createElement("div");
+            slide.className = "dialog-slide";
+            const picture = document.createElement("img");
+            picture.className = "dialog-image";
+            picture.alt = `${name} (${i + 2})`;
+            picture.dataset.fallback = fallback;
+            picture.addEventListener("load", () => fitImage(picture));
+            picture.addEventListener("error", () => {
+                if (!picture.src.endsWith(fallback)) picture.src = fallback;
+            });
+            picture.src = src;
+            slide.append(picture);
+            detailTrack.append(slide);
+        });
+        slideCount = sources.length;
+        const several = slideCount > 1;
+        detailPrev.hidden = !several;
+        detailNext.hidden = !several;
+        detailCounter.hidden = !several;
+        detailThumbs.hidden = !several;
+        detailThumbs.replaceChildren(...(several ? sources : []).map((src, index) => {
             const thumb = document.createElement("button");
             const picture = document.createElement("img");
             thumb.type = "button";
             thumb.className = "dialog-thumb";
-            thumb.setAttribute("aria-label", `Ver imagen ${index + 1} de ${photos.length}`);
+            thumb.setAttribute("aria-label", `Ver imagen ${index + 1} de ${sources.length}`);
             picture.src = src;
             picture.alt = "";
             thumb.append(picture);
-            thumb.addEventListener("click", () => {
-                detailImage.src = src;
-            });
+            thumb.addEventListener("click", () => showSlide(index));
             return thumb;
         }));
-        detailThumbs.hidden = photos.length < 2;
+        showSlide(0, false);
+    };
+
+    detailPrev?.addEventListener("click", () => showSlide(slideIndex - 1));
+    detailNext?.addEventListener("click", () => showSlide(slideIndex + 1));
+    dialog.addEventListener("close", stopAutoplay);
+    dialog.addEventListener("keydown", (event) => {
+        if (slideCount < 2 || event.target.closest("input, textarea, select")) return;
+        if (event.key === "ArrowLeft") showSlide(slideIndex - 1);
+        if (event.key === "ArrowRight") showSlide(slideIndex + 1);
+    });
+    // En celular también se cambia de foto deslizando el dedo.
+    let swipeStart = null;
+    detailTrack?.addEventListener("pointerdown", (event) => { swipeStart = event.clientX; });
+    detailTrack?.addEventListener("pointerup", (event) => {
+        if (swipeStart === null || slideCount < 2) return;
+        const distance = event.clientX - swipeStart;
+        swipeStart = null;
+        if (Math.abs(distance) > 40) showSlide(slideIndex + (distance < 0 ? 1 : -1));
+    });
+
+    const openDetails = (card) => {
+        selectedCard = card;
+        const fallback = card.querySelector(".item-image").dataset.fallback;
+        const photos = JSON.parse(card.dataset.images || "[]");
+        buildCarousel(photos.length ? photos : [card.dataset.image], card.dataset.name, fallback);
         detailName.textContent = card.dataset.name;
         detailCategory.textContent = card.dataset.category;
         detailDescription.textContent = card.dataset.description;
@@ -1138,7 +1321,10 @@
         movementNotesInput.value = "";
         dialog.showModal();
         // Con la ventana ya visible se conoce el tamaño del recuadro de la imagen.
-        window.requestAnimationFrame(() => fitImage(detailImage));
+        window.requestAnimationFrame(() => {
+            detailTrack.querySelectorAll(".dialog-image").forEach(fitImage);
+            restartAutoplay();
+        });
     };
 
     // Datos de zona franca, trazabilidad y servicio: solo se muestran los que el artículo tiene.
@@ -1167,18 +1353,7 @@
     if (editDialog instanceof HTMLDialogElement && editForm instanceof HTMLFormElement) {
         const editMessage = document.querySelector("#edit-item-message");
         const editButton = document.querySelector("#edit-item-button");
-        const editImageSlots = [1, 2, 3].map((n) => {
-            const slot = {
-                src: "",
-                set: setupFilePreview(`#edit-item-image-${n}`, `#edit-item-preview-${n}`, `#edit-item-file-name-${n}`),
-                remove: document.querySelector(`#edit-item-remove-${n}`),
-            };
-            slot.remove.querySelector("input").addEventListener("change", (event) => {
-                if (event.target.checked) slot.set("", "Se quitará al guardar.");
-                else slot.set(slot.src, "Imagen actual.");
-            });
-            return slot;
-        });
+        const editImagePicker = setupImagePicker(document.querySelector("#edit-item-images"));
         const editFields = {
             nombre: "name", categoria: "category", descripcion: "description", unidad: "unit", ubicacion: "location",
             grupo: "group", marca: "brand", subpartida: "tariff", valor_fob_usd: "fob", procedencia: "origin",
@@ -1190,12 +1365,7 @@
         document.querySelector("#open-edit-item").addEventListener("click", () => {
             if (!selectedCard) return;
             editForm.reset();
-            const currentImages = JSON.parse(selectedCard.dataset.images || "[]");
-            editImageSlots.forEach((slot, index) => {
-                slot.src = currentImages[index] || "";
-                slot.set(slot.src, slot.src ? "Imagen actual." : "Sin imagen.");
-                slot.remove.hidden = !slot.src;
-            });
+            editImagePicker?.setExisting(JSON.parse(selectedCard.dataset.images || "[]"));
             const categorySelect = editForm.elements.categoria;
             if (![...categorySelect.options].some((option) => option.value === selectedCard.dataset.category)) {
                 categorySelect.add(new Option(selectedCard.dataset.category, selectedCard.dataset.category));

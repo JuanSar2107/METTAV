@@ -274,7 +274,8 @@ def consultar_asistente():
             instrucciones = instrucciones.replace("Responde siempre en español", "Responde siempre en inglés", 1)
         respuesta = gemini.consultar_gemini(instrucciones, mensajes)
     except gemini.GeminiError as error:
-        current_app.logger.warning("Error del asistente Gemini: %s", error)
+        # El motivo técnico (por ejemplo, el error de red) queda en el log de la app.
+        current_app.logger.warning("Error del asistente Gemini: %s | causa: %r", error, error.__cause__)
         return jsonify(error=mensaje_seguro(error)), 502
 
     return jsonify(respuesta=respuesta)
