@@ -392,6 +392,12 @@ def actualizar_articulo(id_articulo: int):
     try:
         nuevos.update(campos_zona_franca(request.form))
         nuevos.update(campos_trazabilidad(request.form))
+        # El estado del servicio también se puede cambiar aquí (si el formulario lo trae).
+        if "estado_servicio" in request.form:
+            estado_servicio = request.form.get("estado_servicio", "").strip()
+            if estado_servicio and estado_servicio not in ESTADOS_SERVICIO:
+                raise ErrorValidacion("El estado del servicio debe ser: " + ", ".join(ESTADOS_SERVICIO) + ".")
+            nuevos["estado_servicio"] = estado_servicio or None
     except ValueError as error:
         return jsonify(error=mensaje_seguro(error)), 400
     # El código interno y el tipo forman parte del código: no se editan.

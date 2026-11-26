@@ -627,6 +627,7 @@
                 <div><dt>Ubicación</dt><dd id="dialog-location"></dd></div>
                 <div><dt>Stock actual</dt><dd id="dialog-stock"></dd></div>
                 <div><dt>Stock más alto</dt><dd id="dialog-stock-max"></dd></div>
+                <div data-zf-field="serviceStatus" data-zf-empty="Sin estado"><dt>Estado del servicio</dt><dd></dd></div>
                 <div data-zf-field="internalCode" hidden><dt>Código interno</dt><dd></dd></div>
                 <div data-zf-field="groupName" hidden><dt>Grupo Sizfra</dt><dd></dd></div>
                 <div data-zf-field="brand" hidden><dt>Marca</dt><dd></dd></div>
@@ -643,7 +644,6 @@
                 <div data-zf-field="exitReason" hidden><dt>Razón del retiro</dt><dd></dd></div>
                 <div data-zf-field="client" hidden><dt>Cliente</dt><dd></dd></div>
                 <div data-zf-field="serviceType" hidden><dt>Servicio</dt><dd></dd></div>
-                <div data-zf-field="serviceStatus" hidden><dt>Estado del servicio</dt><dd></dd></div>
             </dl>
             {% if puede_operar %}
             <details class="service-editor" id="service-editor">
@@ -1335,6 +1335,12 @@
                 </label>
                 <label class="admin-field"><span>Estado de la mercancía</span>
                     <input name="estado" type="text" maxlength="40">
+                </label>
+                <label class="admin-field"><span>Estado del servicio</span>
+                    <select name="estado_servicio">
+                        <option value="">Sin estado</option>
+                        {% for estado in estados_servicio %}<option value="{{ estado }}">{{ estado }}</option>{% endfor %}
+                    </select>
                 </label>
                 <label class="admin-field"><span>Serial</span>
                     <input name="serial" type="text" maxlength="80" autocomplete="off">

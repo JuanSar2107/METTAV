@@ -1154,8 +1154,10 @@
             if (value && (row.dataset.zfField === "entryDate" || row.dataset.zfField === "exitDate")) {
                 value = formatDate(value);
             }
-            row.querySelector("dd").textContent = value;
-            row.hidden = !value;
+            // Algunas filas se muestran siempre, con un texto cuando no hay dato.
+            const empty = row.dataset.zfEmpty;
+            row.querySelector("dd").textContent = value || empty || "";
+            row.hidden = !value && !empty;
         });
     };
 
@@ -1182,7 +1184,7 @@
             grupo: "group", marca: "brand", subpartida: "tariff", valor_fob_usd: "fob", procedencia: "origin",
             estado: "condition", serial: "serial", responsable: "responsible", fecha_ingreso: "entryDate",
             documento_soporte: "entryDoc", fecha_retiro: "exitDate", documento_retiro: "exitDoc",
-            razon_retiro: "exitReason",
+            razon_retiro: "exitReason", estado_servicio: "serviceStatus",
         };
 
         document.querySelector("#open-edit-item").addEventListener("click", () => {

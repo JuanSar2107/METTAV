@@ -151,3 +151,19 @@ def test_panel_admin_tiene_editar(client, admin, mesa):
 def test_asistente_admite_el_inventario_completo():
     # El Excel tiene 312 ítems: no deben quedar por fuera.
     assert assistant._MAX_ARTICULOS >= 1000
+
+
+def test_editar_cambia_el_estado_del_servicio_y_el_filtro_lo_encuentra(client, app, admin, mesa):
+    assert _editar(client, mesa, estado_servicio="Terminado").status_code == 200
+    with app.app_context():
+        assert db.session.get(ArticuloInventario, mesa).estado_servicio == "Terminado"
+        assert RegistroAuditoria.query.filter_by(accion="Editar artículo").order_by(RegistroAuditoria.id.desc()).first().detalle.endswith("estado servicio")
+    filas = client.get("/api/reportes/inventario?estado_servicio=Terminado").get_json()["filas"]
+    assert [f["estado_servicio"] for f in filas] == ["Terminado"]
+    assert client.get("/api/reportes/inventario?estado_servicio=Recibido").get_json()["total"] == 0
+
+    # Elegir "Sin estado" lo deja vacío; un valor que no existe se rechaza.
+    assert _editar(client, mesa, estado_servicio="").status_code == 200
+    with app.app_context():
+        assert db.session.get(ArticuloInventario, mesa).estado_servicio is None
+    assert _editar(client, mesa, estado_servicio="Perdido").status_code == 400
