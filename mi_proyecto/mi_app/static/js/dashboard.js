@@ -2185,10 +2185,13 @@
         userDetailDialog.showModal();
     };
 
-    document.querySelectorAll(".user-more-btn").forEach((button) => {
-        button.addEventListener("click", () => {
-            const card = button.closest(".user-card");
-            if (card) openUserDetails(card);
+    // Toda la tarjeta del usuario abre su detalle.
+    document.querySelectorAll(".user-card").forEach((card) => {
+        card.addEventListener("click", () => openUserDetails(card));
+        card.addEventListener("keydown", (event) => {
+            if (event.target !== card || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            openUserDetails(card);
         });
     });
 

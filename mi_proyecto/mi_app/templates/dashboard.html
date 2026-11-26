@@ -354,6 +354,10 @@
                     {% for u in usuarios_registrados %}
                     <article
                         class="user-card"
+                        tabindex="0"
+                        role="button"
+                        aria-haspopup="dialog"
+                        aria-label="Ver más sobre {{ u.nombre_completo or u.usuario }}"
                         data-id="{{ u.id_usuario }}"
                         data-username="{{ u.usuario }}"
                         data-fullname="{{ u.nombre_completo or '' }}"
@@ -404,14 +408,6 @@
                                     {% endif %}
                                 </div>
                             </div>
-                        </div>
-                        <div class="user-card-actions">
-                            <button class="more-button user-more-btn" type="button" aria-label="Ver más sobre {{ u.nombre_completo or u.usuario }}">
-                                Ver más
-                                <svg viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d="M5 12h14m-6-6 6 6-6 6" />
-                                </svg>
-                            </button>
                         </div>
                     </article>
                     {% endfor %}

@@ -2688,6 +2688,15 @@ body {
     box-shadow: 0 8px 24px rgba(5, 20, 45, 0.08);
 }
 
+.user-card {
+    cursor: pointer;
+}
+
+.user-card:focus-visible {
+    outline: 3px solid rgba(75, 155, 213, 0.55);
+    outline-offset: 3px;
+}
+
 .user-card-main {
     display: flex;
     align-items: center;
