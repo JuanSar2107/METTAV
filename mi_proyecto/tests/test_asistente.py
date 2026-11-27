@@ -380,3 +380,28 @@ def test_error_de_clave_no_se_reintenta(monkeypatch, con_clave):
     with pytest.raises(gemini.GeminiError, match="no es válida"):
         gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
     assert len(llamadas) == 1
+
+
+def test_gemini_usa_respaldos_por_defecto(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODELOS_RESPALDO", raising=False)
+    monkeypatch.setenv("GEMINI_MODEL", "principal")
+    assert gemini._modelos() == ["principal", *gemini.MODELOS_RESPALDO_POR_DEFECTO]
+    monkeypatch.setenv("GEMINI_MODELOS_RESPALDO", "ninguno")
+    assert gemini._modelos() == ["principal"]
+
+
+@pytest.mark.parametrize("codigo", [404, 429])
+def test_gemini_modelo_no_usable_pasa_al_siguiente(monkeypatch, con_clave, codigo):
+    llamadas = []
+    monkeypatch.setenv("GEMINI_MODEL", "malo")
+    monkeypatch.setenv("GEMINI_MODELOS_RESPALDO", "bueno")
+
+    def _urlopen(peticion, timeout):
+        llamadas.append(peticion.full_url)
+        if "/malo:" in peticion.full_url:
+            raise urllib.error.HTTPError(peticion.full_url, codigo, "x", {}, io.BytesIO(b"{}"))
+        return _respuesta_ok("hola")
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    assert gemini.consultar_gemini("i", [{"rol": "usuario", "texto": "p"}]) == "hola"
+    assert len(llamadas) == 2

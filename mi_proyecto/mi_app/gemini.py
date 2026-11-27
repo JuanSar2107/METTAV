@@ -8,7 +8,8 @@ Variables de entorno:
     GEMINI_MODEL   -> modelo a usar (por defecto: gemini-3.5-flash)
     GEMINI_TIMEOUT -> segundos máximos de espera por una respuesta (por defecto: 60)
     GEMINI_MODELOS_RESPALDO -> modelos a probar, en orden, si el principal está saturado
-                     (separados por comas; por defecto ninguno)
+                     (separados por comas; por defecto: gemini-3-flash, gemini-2.5-flash).
+                     Escribe "ninguno" para no usar respaldo.
 """
 
 import json
@@ -24,6 +25,7 @@ _log = logging.getLogger(__name__)
 
 MODELO_POR_DEFECTO = "gemini-3.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
+MODELOS_RESPALDO_POR_DEFECTO = ("gemini-3-flash", "gemini-2.5-flash")
 _TIEMPO_POR_DEFECTO = 60
 # Respuestas de Google que indican saturación pasajera: vale la pena reintentar.
 _CODIGOS_TEMPORALES = {500, 502, 503, 504}
@@ -40,7 +42,13 @@ class _Saturado(Exception):
 
 def _modelos() -> list[str]:
     principal = os.environ.get("GEMINI_MODEL", "").strip() or MODELO_POR_DEFECTO
-    respaldo = [m.strip() for m in (os.environ.get("GEMINI_MODELOS_RESPALDO") or "").split(",") if m.strip()]
+    texto = os.environ.get("GEMINI_MODELOS_RESPALDO")
+    if texto is None or not texto.strip():
+        respaldo = list(MODELOS_RESPALDO_POR_DEFECTO)
+    elif texto.strip().lower() == "ninguno":
+        respaldo = []
+    else:
+        respaldo = [m.strip() for m in texto.split(",") if m.strip()]
     return list(dict.fromkeys([principal, *respaldo]))
 
 
@@ -49,6 +57,15 @@ def _tiempo_maximo() -> int:
         return min(max(int(os.environ.get("GEMINI_TIMEOUT") or _TIEMPO_POR_DEFECTO), 10), 240)
     except ValueError:
         return _TIEMPO_POR_DEFECTO
+
+
+class _ModeloNoUsable(Exception):
+    """El modelo no existe (404) o agotó su cuota (429): conviene probar otro."""
+
+    def __init__(self, codigo: int, mensaje: str):
+        super().__init__(codigo)
+        self.codigo = codigo
+        self.mensaje = mensaje
 
 
 class GeminiError(ErrorValidacion):
@@ -83,8 +100,11 @@ def consultar_gemini(instrucciones: str, mensajes: list[dict]) -> str:
     datos_json = json.dumps(cuerpo).encode("utf-8")
 
     # Si Google responde que el modelo está saturado (503 y similares), se reintenta un par
-    # de veces y luego se prueba con los modelos de respaldo, si hay.
-    for modelo in _modelos():
+    # de veces y luego se prueba con los modelos de respaldo. Si un modelo no existe (404)
+    # o llegó a su límite de uso (429), se pasa directo al siguiente.
+    modelos = _modelos()
+    ultimo_error = None
+    for modelo in modelos:
         for intento, espera in enumerate((0.0, *_ESPERAS_REINTENTO)):
             if espera:
                 time.sleep(espera)
@@ -92,6 +112,12 @@ def consultar_gemini(instrucciones: str, mensajes: list[dict]) -> str:
                 return _consultar_modelo(modelo, clave, datos_json)
             except _Saturado as saturado:
                 _log.warning("Gemini (%s) respondió %s en el intento %s.", modelo, saturado.codigo, intento + 1)
+            except _ModeloNoUsable as error:
+                _log.warning("Gemini (%s) no se pudo usar (%s); se prueba el siguiente.", modelo, error.codigo)
+                ultimo_error = ultimo_error or error.mensaje
+                break
+    if ultimo_error:
+        raise GeminiError(ultimo_error)
     raise GeminiError("Gemini está saturado en este momento. Inténtalo de nuevo en unos minutos.")
 
 
@@ -109,6 +135,8 @@ def _consultar_modelo(modelo: str, clave: str, datos_json: bytes) -> str:
     except urllib.error.HTTPError as error:
         if error.code in _CODIGOS_TEMPORALES:
             raise _Saturado(error.code) from error
+        if error.code in (404, 429):
+            raise _ModeloNoUsable(error.code, _mensaje_error_http(error)) from error
         raise GeminiError(_mensaje_error_http(error)) from error
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         # Se distingue "tardó demasiado" de "no hay conexión", y el motivo exacto va al log.
