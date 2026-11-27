@@ -5,10 +5,11 @@ así no se agrega ningún SDK a la imagen Docker.
 
 Variables de entorno:
     GEMINI_API_KEY -> clave de Google AI Studio (https://aistudio.google.com/apikey)
-    GEMINI_MODEL   -> modelo a usar (por defecto: gemini-2.5-flash)
+    GEMINI_MODEL   -> modelo a usar (por defecto: gemini-3.5-flash)
     GEMINI_TIMEOUT -> segundos máximos de espera por una respuesta (por defecto: 15; si se pasa, se prueba el siguiente modelo)
     GEMINI_MODELOS_RESPALDO -> modelos a probar, en orden, si el principal está saturado
-                     (separados por comas; por defecto: gemini-2.5-flash-lite, gemini-3-flash).
+                     (separados por comas; por defecto: gemini-3.5-flash-lite, gemini-3-flash;
+                     si ninguno existe, se usa uno de los que Google ofrezca para la clave).
                      Escribe "ninguno" para no usar respaldo.
 """
 
@@ -23,10 +24,10 @@ from mi_app.validacion import ErrorValidacion
 
 _log = logging.getLogger(__name__)
 
-MODELO_POR_DEFECTO = "gemini-2.5-flash"
+MODELO_POR_DEFECTO = "gemini-3.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 _URL_STREAM = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:streamGenerateContent?alt=sse"
-MODELOS_RESPALDO_POR_DEFECTO = ("gemini-2.5-flash-lite", "gemini-3-flash")
+MODELOS_RESPALDO_POR_DEFECTO = ("gemini-3.5-flash-lite", "gemini-3-flash")
 _TIEMPO_POR_DEFECTO = 15
 # Respuestas de Google que indican saturación pasajera: vale la pena reintentar.
 _CODIGOS_TEMPORALES = {500, 502, 503, 504}
@@ -51,6 +52,49 @@ def _modelos() -> list[str]:
     else:
         respaldo = [m.strip() for m in texto.split(",") if m.strip()]
     return list(dict.fromkeys([principal, *respaldo]))
+
+
+# Modelos que Google dijo que no existen (404) y lista de modelos disponibles para la
+# clave, consultada a Google una vez por hora como máximo. Así, si Google retira un
+# modelo, el asistente sigue funcionando con otro sin tener que tocar la configuración.
+_no_existen: set[str] = set()
+_disponibles_cache: dict = {"hasta": 0.0, "modelos": []}
+_URL_MODELOS = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+_EXCLUIR = ("image", "tts", "audio", "live", "embedding", "robotics", "computer-use")
+
+
+def _version(nombre: str) -> float:
+    try:
+        return float(nombre.split("-")[1])
+    except (IndexError, ValueError):
+        return 0.0
+
+
+def _modelos_disponibles(clave: str) -> list[str]:
+    """Modelos "flash" de texto que la clave puede usar, del más conveniente al menos."""
+    if time.time() < _disponibles_cache["hasta"]:
+        return _disponibles_cache["modelos"]
+    modelos = []
+    try:
+        peticion = urllib.request.Request(_URL_MODELOS, headers={"x-goog-api-key": clave})
+        with urllib.request.urlopen(peticion, timeout=_tiempo_maximo()) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+        for modelo in datos.get("models") or []:
+            nombre = str(modelo.get("name", "")).removeprefix("models/")
+            if (
+                nombre.startswith("gemini-") and "flash" in nombre
+                and "generateContent" in (modelo.get("supportedGenerationMethods") or [])
+                and not any(palabra in nombre for palabra in _EXCLUIR)
+            ):
+                modelos.append(nombre)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, AttributeError) as error:
+        _log.warning("No se pudo consultar la lista de modelos de Gemini: %r", error)
+    # Primero los estables, luego los "lite", y de la versión más nueva a la más vieja.
+    modelos.sort(key=lambda n: ("preview" in n or "exp" in n, "lite" in n, -_version(n), n))
+    _disponibles_cache.update(hasta=time.time() + 3600, modelos=modelos)
+    if modelos:
+        _log.info("Modelos de Gemini disponibles: %s", ", ".join(modelos))
+    return modelos
 
 
 def _tiempo_maximo() -> int:
@@ -112,7 +156,7 @@ def _clave() -> str:
     return clave
 
 
-def _con_respaldo(intentar):
+def _con_respaldo(intentar, clave: str):
     """Llama a `intentar(modelo)` con el modelo principal y, si falla, con los de respaldo.
 
     Si Google responde que el modelo está saturado (503 y similares), se reintenta un par
@@ -120,7 +164,23 @@ def _con_respaldo(intentar):
     de uso (429) o tarda demasiado, se pasa directo al siguiente.
     """
     ultimo_error = None
-    for modelo in _modelos():
+    modelos = [m for m in _modelos() if m not in _no_existen]
+    buscados = False
+    if not modelos:
+        modelos, buscados = list(_modelos_disponibles(clave)), True
+    indice = 0
+    while True:
+        if indice >= len(modelos):
+            if buscados or not _no_existen:
+                break
+            # Algún modelo ya no existe: antes de rendirse se prueban los que Google
+            # ofrece para esta clave.
+            buscados = True
+            modelos += [m for m in _modelos_disponibles(clave) if m not in modelos and m not in _no_existen]
+            if indice >= len(modelos):
+                break
+        modelo = modelos[indice]
+        indice += 1
         for intento, espera in enumerate((0.0, *_ESPERAS_REINTENTO)):
             if espera:
                 time.sleep(espera)
@@ -133,6 +193,8 @@ def _con_respaldo(intentar):
                 ultimo_error = ultimo_error or "Gemini tardó demasiado en responder. Inténtalo de nuevo en un momento."
                 break
             except _ModeloNoUsable as error:
+                if error.codigo == 404:
+                    _no_existen.add(modelo)
                 _log.warning("Gemini (%s) no se pudo usar (%s); se prueba el siguiente.", modelo, error.codigo)
                 ultimo_error = ultimo_error or error.mensaje
                 break
@@ -149,7 +211,7 @@ def consultar_gemini(instrucciones: str, mensajes: list[dict]) -> str:
     """
     clave = _clave()
     cuerpo = _cuerpo_base(instrucciones, mensajes)
-    return _con_respaldo(lambda modelo: _consultar_modelo(modelo, clave, _cuerpo_para(modelo, cuerpo)))
+    return _con_respaldo(lambda modelo: _consultar_modelo(modelo, clave, _cuerpo_para(modelo, cuerpo)), clave)
 
 
 def consultar_gemini_por_partes(instrucciones: str, mensajes: list[dict]):
@@ -176,7 +238,7 @@ def consultar_gemini_por_partes(instrucciones: str, mensajes: list[dict]):
             raise _Lento() from error
         return _continuar(primero, trozos, respuesta)
 
-    return _con_respaldo(intentar)
+    return _con_respaldo(intentar, clave)
 
 
 def _continuar(primero: str, trozos, respuesta):

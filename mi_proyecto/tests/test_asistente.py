@@ -9,6 +9,12 @@ import pytest
 from mi_app import gemini
 
 
+@pytest.fixture(autouse=True)
+def _memoria_de_modelos_limpia(monkeypatch):
+    monkeypatch.setattr(gemini, "_no_existen", set())
+    monkeypatch.setattr(gemini, "_disponibles_cache", {"hasta": 0.0, "modelos": []})
+
+
 @pytest.fixture()
 def con_clave(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "clave-de-prueba")
@@ -247,7 +253,7 @@ def test_consultar_gemini_arma_peticion_y_lee_texto(monkeypatch, con_clave):
     assert texto == "Hay 5 pares."
     peticion = enviadas[0]
     assert peticion.get_header("X-goog-api-key") == "clave-de-prueba"
-    assert "gemini-2.5-flash:generateContent" in peticion.full_url
+    assert "gemini-3.5-flash:generateContent" in peticion.full_url
     cuerpo = json.loads(peticion.data)
     assert [c["role"] for c in cuerpo["contents"]] == ["user", "model"]
 
@@ -356,7 +362,7 @@ def test_gemini_saturado_usa_el_modelo_de_respaldo(monkeypatch, con_clave):
 
     monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
     assert gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}]) == "desde el respaldo"
-    assert sum("gemini-2.5-flash" in url for url in llamadas) == 3  # el principal, con sus reintentos
+    assert sum("gemini-3.5-flash" in url for url in llamadas) == 3  # el principal, con sus reintentos
     assert "modelo-respaldo" in llamadas[-1]
 
 
@@ -476,3 +482,33 @@ def test_gemini_por_partes_lee_los_eventos(monkeypatch, con_clave):
     trozos = gemini.consultar_gemini_por_partes("i", [{"rol": "usuario", "texto": "p"}])
     assert "".join(trozos) == "Hola mundo"
     assert "streamGenerateContent?alt=sse" in urls[-1] and "/respaldo:" in urls[-1]
+
+
+def test_gemini_modelo_retirado_busca_uno_disponible(monkeypatch, con_clave):
+    monkeypatch.setattr(gemini, "_no_existen", set())
+    monkeypatch.setattr(gemini, "_disponibles_cache", {"hasta": 0.0, "modelos": []})
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("GEMINI_MODELOS_RESPALDO", "ninguno")
+    lista = {"models": [
+        {"name": "models/gemini-3.5-flash-image", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-3.5-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-3.5-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-4-flash-preview", "supportedGenerationMethods": ["generateContent"]},
+    ]}
+    llamadas = []
+
+    def _urlopen(peticion, timeout):
+        llamadas.append(peticion.full_url)
+        if "?pageSize" in peticion.full_url:
+            return _RespuestaFalsa(json.dumps(lista).encode())
+        if "/gemini-3.5-flash:" in peticion.full_url:
+            return _respuesta_ok("funciona")
+        raise urllib.error.HTTPError(peticion.full_url, 404, "x", {}, io.BytesIO(b"{}"))
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    assert gemini.consultar_gemini("i", [{"rol": "usuario", "texto": "p"}]) == "funciona"
+    assert gemini._modelos_disponibles("x") == ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-4-flash-preview"]
+    # La segunda vez ya no insiste con el modelo retirado ni vuelve a pedir la lista.
+    llamadas.clear()
+    assert gemini.consultar_gemini("i", [{"rol": "usuario", "texto": "p"}]) == "funciona"
+    assert len(llamadas) == 1
