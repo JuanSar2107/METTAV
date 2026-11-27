@@ -10,7 +10,7 @@
 #   DATABASE_URL   -> base de datos PostgreSQL (vacía = SQLite en el volumen)
 #   GEMINI_KEY     -> clave de Google AI Studio para el asistente con IA
 #                     (dentro del contenedor la app la lee como GEMINI_API_KEY)
-#   GEMINI_MODEL   -> modelo de Gemini (por defecto: gemini-3.5-flash)
+#   GEMINI_MODEL   -> modelo de Gemini (por defecto: gemini-2.5-flash)
 #
 # Este archivo NO publica puertos del host: Coolify rutea el tráfico desde su
 # proxy hacia el puerto 5000 del contenedor (configúralo en "Ports Exposes").
@@ -49,9 +49,9 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_SEGURIDAD: ${SMTP_SEGURIDAD:-starttls}
       GEMINI_API_KEY: ${GEMINI_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       # Segundos máximos de espera por una respuesta del asistente (10 a 240).
-      GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-60}
+      GEMINI_TIMEOUT: ${GEMINI_TIMEOUT:-15}
       # Modelos que se prueban si el principal está saturado, separados por comas.
       GEMINI_MODELOS_RESPALDO: ${GEMINI_MODELOS_RESPALDO:-}
     # Coolify expone el servicio a través de su propio proxy (dominio + HTTPS),

@@ -247,7 +247,7 @@ def test_consultar_gemini_arma_peticion_y_lee_texto(monkeypatch, con_clave):
     assert texto == "Hay 5 pares."
     peticion = enviadas[0]
     assert peticion.get_header("X-goog-api-key") == "clave-de-prueba"
-    assert "gemini-3.5-flash:generateContent" in peticion.full_url
+    assert "gemini-2.5-flash:generateContent" in peticion.full_url
     cuerpo = json.loads(peticion.data)
     assert [c["role"] for c in cuerpo["contents"]] == ["user", "model"]
 
@@ -356,7 +356,7 @@ def test_gemini_saturado_usa_el_modelo_de_respaldo(monkeypatch, con_clave):
 
     monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
     assert gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}]) == "desde el respaldo"
-    assert sum("gemini-3.5-flash" in url for url in llamadas) == 3  # el principal, con sus reintentos
+    assert sum("gemini-2.5-flash" in url for url in llamadas) == 3  # el principal, con sus reintentos
     assert "modelo-respaldo" in llamadas[-1]
 
 

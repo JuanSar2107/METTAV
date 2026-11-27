@@ -5,10 +5,10 @@ así no se agrega ningún SDK a la imagen Docker.
 
 Variables de entorno:
     GEMINI_API_KEY -> clave de Google AI Studio (https://aistudio.google.com/apikey)
-    GEMINI_MODEL   -> modelo a usar (por defecto: gemini-3.5-flash)
+    GEMINI_MODEL   -> modelo a usar (por defecto: gemini-2.5-flash)
     GEMINI_TIMEOUT -> segundos máximos de espera por una respuesta (por defecto: 15; si se pasa, se prueba el siguiente modelo)
     GEMINI_MODELOS_RESPALDO -> modelos a probar, en orden, si el principal está saturado
-                     (separados por comas; por defecto: gemini-3-flash, gemini-2.5-flash).
+                     (separados por comas; por defecto: gemini-2.5-flash-lite, gemini-3-flash).
                      Escribe "ninguno" para no usar respaldo.
 """
 
@@ -23,10 +23,10 @@ from mi_app.validacion import ErrorValidacion
 
 _log = logging.getLogger(__name__)
 
-MODELO_POR_DEFECTO = "gemini-3.5-flash"
+MODELO_POR_DEFECTO = "gemini-2.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 _URL_STREAM = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:streamGenerateContent?alt=sse"
-MODELOS_RESPALDO_POR_DEFECTO = ("gemini-3-flash", "gemini-2.5-flash")
+MODELOS_RESPALDO_POR_DEFECTO = ("gemini-2.5-flash-lite", "gemini-3-flash")
 _TIEMPO_POR_DEFECTO = 15
 # Respuestas de Google que indican saturación pasajera: vale la pena reintentar.
 _CODIGOS_TEMPORALES = {500, 502, 503, 504}
