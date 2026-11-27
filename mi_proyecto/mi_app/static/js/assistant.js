@@ -85,18 +85,51 @@
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pregunta: question, historial: history, idioma: window.METTAV_IDIOMA }),
+                body: JSON.stringify({
+                    pregunta: question,
+                    historial: history,
+                    idioma: window.METTAV_IDIOMA,
+                    por_partes: true,
+                }),
             });
-            const data = await response.json().catch(() => ({}));
-            pending.remove();
-            if (!response.ok) {
+            if (!response.ok || !response.body) {
+                const data = await response.json().catch(() => ({}));
+                pending.remove();
                 addMessage(data.error || "No se pudo obtener una respuesta.", "error");
                 return;
             }
-            addMessage(data.respuesta, "bot");
-            history.push({ rol: "usuario", texto: question }, { rol: "asistente", texto: data.respuesta });
+
+            // La respuesta llega a trozos y se va mostrando mientras Gemini la escribe.
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let answer = "";
+            let bubble = null;
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                answer += decoder.decode(value, { stream: true });
+                if (!answer) continue;
+                if (!bubble) {
+                    pending.remove();
+                    bubble = addMessage("", "bot");
+                    bubble.classList.add("is-writing");
+                }
+                const nearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 60;
+                bubble.textContent = answer.replace(/\*\*(.+?)\*\*/g, "$1");
+                if (nearBottom) messages.scrollTop = messages.scrollHeight;
+            }
+            answer += decoder.decode();
+            if (!bubble) {
+                pending.remove();
+                addMessage("No se pudo obtener una respuesta.", "error");
+                return;
+            }
+            bubble.textContent = answer.replace(/\*\*(.+?)\*\*/g, "$1");
+            bubble.classList.remove("is-writing");
+            history.push({ rol: "usuario", texto: question }, { rol: "asistente", texto: answer });
         } catch {
             pending.remove();
+            messages.querySelector(".is-writing")?.classList.remove("is-writing");
             addMessage("No se pudo conectar con el servidor.", "error");
         } finally {
             busy = false;

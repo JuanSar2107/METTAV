@@ -1,4 +1,6 @@
-from flask import Blueprint, current_app, jsonify, request
+import re
+
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from mi_app.validacion import mensaje_seguro
 from mi_app import gemini
@@ -242,6 +244,33 @@ def _historial_valido(historial) -> list[dict]:
     return mensajes
 
 
+# Saludos y agradecimientos sueltos se contestan al instante, sin consultar a Gemini.
+_SALUDO = re.compile(
+    r"^\s*(hola|holi|buenas|buen d[ií]a|buenos d[ií]as|buenas tardes|buenas noches|hey|hi|hello)"
+    r"[\s!¡.,]*$", re.IGNORECASE)
+_GRACIAS = re.compile(r"^\s*(gracias|muchas gracias|mil gracias|ok gracias|thanks|thank you)[\s!¡.,]*$", re.IGNORECASE)
+
+
+def _respuesta_inmediata(pregunta: str, usuario: Usuario, idioma: str | None) -> str | None:
+    nombre = (usuario.nombre_completo or usuario.usuario).split()[0].capitalize()
+    if _SALUDO.match(pregunta):
+        if idioma == "en":
+            return f"Hi {nombre}, how can I help you with the METTAV inventory today?"
+        return f"Hola {nombre}, ¿en qué te puedo ayudar hoy con el inventario de METTAV?"
+    if _GRACIAS.match(pregunta):
+        return "You're welcome! Anything else?" if idioma == "en" else "¡Con gusto! ¿Necesitas algo más?"
+    return None
+
+
+def _respuesta_por_partes(trozos) -> Response:
+    """Envía el texto a medida que llega. Los encabezados evitan que un proxy lo junte."""
+    return Response(
+        trozos,
+        mimetype="text/plain",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @asistente_bp.post("/")
 def consultar_asistente():
     usuario = _usuario_actual()
@@ -266,12 +295,19 @@ def consultar_asistente():
         return respuesta_limite(espera, "Has hecho muchas consultas seguidas.")
     limitador().registrar(clave_limite)
 
+    por_partes = datos.get("por_partes") is True
+    inmediata = _respuesta_inmediata(pregunta, usuario, datos.get("idioma"))
+    if inmediata:
+        return _respuesta_por_partes([inmediata]) if por_partes else jsonify(respuesta=inmediata)
+
     mensajes = _historial_valido(datos.get("historial"))
     mensajes.append({"rol": "usuario", "texto": pregunta.strip()})
     try:
         instrucciones = _instrucciones(usuario)
         if datos.get("idioma") == "en":
             instrucciones = instrucciones.replace("Responde siempre en español", "Responde siempre en inglés", 1)
+        if por_partes:
+            return _respuesta_por_partes(gemini.consultar_gemini_por_partes(instrucciones, mensajes))
         respuesta = gemini.consultar_gemini(instrucciones, mensajes)
     except gemini.GeminiError as error:
         # El motivo técnico (por ejemplo, el error de red) queda en el log de la app.

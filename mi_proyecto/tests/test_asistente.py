@@ -217,7 +217,7 @@ def test_asistente_error_de_gemini_responde_502(client, con_clave, monkeypatch, 
     creador_usuarios("ana")
     iniciar_sesion("ana")
 
-    respuesta = client.post("/api/asistente/", json={"pregunta": "Hola"})
+    respuesta = client.post("/api/asistente/", json={"pregunta": "¿Qué hay en bodega?"})
     assert respuesta.status_code == 502
     assert respuesta.get_json()["error"] == "La clave GEMINI_API_KEY no es válida."
 
@@ -271,8 +271,8 @@ def test_asistente_responde_en_el_idioma_de_la_interfaz(client, creador_usuarios
     creador_usuarios("empleado")
     iniciar_sesion("empleado")
 
-    assert client.post("/api/asistente/", json={"pregunta": "Hi", "idioma": "en"}).status_code == 200
-    assert client.post("/api/asistente/", json={"pregunta": "Hola"}).status_code == 200
+    assert client.post("/api/asistente/", json={"pregunta": "What is in stock?", "idioma": "en"}).status_code == 200
+    assert client.post("/api/asistente/", json={"pregunta": "¿Qué hay en bodega?"}).status_code == 200
     assert "Responde siempre en inglés" in instrucciones[0]
     assert "Responde siempre en español" in instrucciones[1]
 
@@ -316,7 +316,7 @@ def test_tiempo_de_espera_configurable(monkeypatch, con_clave):
     gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
     monkeypatch.setenv("GEMINI_TIMEOUT", "no-es-numero")
     gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
-    assert usados == [25, 120, 25]
+    assert usados == [15, 120, 15]
 
 
 def _respuesta_ok(texto="ok"):
@@ -426,3 +426,53 @@ def test_gemini_lento_pasa_al_siguiente_modelo(monkeypatch, con_clave):
 
     monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
     assert gemini.consultar_gemini("i", [{"rol": "usuario", "texto": "p"}]) == "listo"
+
+
+def test_saludo_se_responde_al_instante_sin_gemini(client, monkeypatch, creador_usuarios, iniciar_sesion):
+    monkeypatch.setattr(gemini, "clave_configurada", lambda: True)
+    monkeypatch.setattr(gemini, "consultar_gemini", lambda *_a: pytest.fail("no debe llamar a Gemini"))
+    creador_usuarios("juan")
+    iniciar_sesion("juan")
+    respuesta = client.post("/api/asistente/", json={"pregunta": "hola!"})
+    assert respuesta.get_json()["respuesta"].startswith("Hola Juan")
+    respuesta = client.post("/api/asistente/", json={"pregunta": "gracias", "por_partes": True})
+    assert "Con gusto" in respuesta.get_data(as_text=True)
+
+
+def test_asistente_responde_por_partes(client, monkeypatch, creador_usuarios, iniciar_sesion):
+    monkeypatch.setattr(gemini, "clave_configurada", lambda: True)
+    monkeypatch.setattr(gemini, "consultar_gemini_por_partes", lambda *_a: iter(["Hay ", "3 ", "guantes."]))
+    creador_usuarios("empleado")
+    iniciar_sesion("empleado")
+    respuesta = client.post("/api/asistente/", json={"pregunta": "¿Cuántos guantes hay?", "por_partes": True})
+    assert respuesta.status_code == 200
+    assert respuesta.mimetype == "text/plain"
+    assert respuesta.get_data(as_text=True) == "Hay 3 guantes."
+
+
+def test_gemini_por_partes_lee_los_eventos(monkeypatch, con_clave):
+    eventos = [
+        b'data: {"candidates":[{"content":{"parts":[{"text":"pensando","thought":true}]}}]}\r\n', b"\r\n",
+        b'data: {"candidates":[{"content":{"parts":[{"text":"Hola "}]}}]}\r\n', b"\r\n",
+        b'data: {"candidates":[{"content":{"parts":[{"text":"mundo"}]}}]}\r\n',
+    ]
+
+    class _Flujo(list):
+        def close(self):
+            pass
+
+    urls = []
+
+    def _urlopen(peticion, timeout):
+        urls.append(peticion.full_url)
+        if "/principal:" in peticion.full_url:
+            raise urllib.error.HTTPError(peticion.full_url, 503, "x", {}, io.BytesIO(b"{}"))
+        return _Flujo(eventos)
+
+    monkeypatch.setattr(gemini.time, "sleep", lambda _s: None)
+    monkeypatch.setenv("GEMINI_MODEL", "principal")
+    monkeypatch.setenv("GEMINI_MODELOS_RESPALDO", "respaldo")
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    trozos = gemini.consultar_gemini_por_partes("i", [{"rol": "usuario", "texto": "p"}])
+    assert "".join(trozos) == "Hola mundo"
+    assert "streamGenerateContent?alt=sse" in urls[-1] and "/respaldo:" in urls[-1]

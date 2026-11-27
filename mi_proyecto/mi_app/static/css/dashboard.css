@@ -3141,6 +3141,21 @@ body {
     font-style: italic;
 }
 
+/* Cursor parpadeante mientras la respuesta se va escribiendo. */
+.assistant-message.is-writing::after {
+    content: "▍";
+    margin-left: 2px;
+    animation: assistant-cursor 0.9s steps(1) infinite;
+}
+
+@keyframes assistant-cursor {
+    50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .assistant-message.is-writing::after { animation: none; }
+}
+
 .assistant-form {
     display: flex;
     align-items: flex-end;
