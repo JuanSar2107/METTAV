@@ -6,7 +6,7 @@ así no se agrega ningún SDK a la imagen Docker.
 Variables de entorno:
     GEMINI_API_KEY -> clave de Google AI Studio (https://aistudio.google.com/apikey)
     GEMINI_MODEL   -> modelo a usar (por defecto: gemini-3.5-flash)
-    GEMINI_TIMEOUT -> segundos máximos de espera por una respuesta (por defecto: 60)
+    GEMINI_TIMEOUT -> segundos máximos de espera por una respuesta (por defecto: 25; si se pasa, se prueba el siguiente modelo)
     GEMINI_MODELOS_RESPALDO -> modelos a probar, en orden, si el principal está saturado
                      (separados por comas; por defecto: gemini-3-flash, gemini-2.5-flash).
                      Escribe "ninguno" para no usar respaldo.
@@ -26,7 +26,7 @@ _log = logging.getLogger(__name__)
 MODELO_POR_DEFECTO = "gemini-3.5-flash"
 _URL_API = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 MODELOS_RESPALDO_POR_DEFECTO = ("gemini-3-flash", "gemini-2.5-flash")
-_TIEMPO_POR_DEFECTO = 60
+_TIEMPO_POR_DEFECTO = 25
 # Respuestas de Google que indican saturación pasajera: vale la pena reintentar.
 _CODIGOS_TEMPORALES = {500, 502, 503, 504}
 _ESPERAS_REINTENTO = (1.5, 4.0)
@@ -54,7 +54,7 @@ def _modelos() -> list[str]:
 
 def _tiempo_maximo() -> int:
     try:
-        return min(max(int(os.environ.get("GEMINI_TIMEOUT") or _TIEMPO_POR_DEFECTO), 10), 240)
+        return min(max(int(os.environ.get("GEMINI_TIMEOUT") or _TIEMPO_POR_DEFECTO), 5), 240)
     except ValueError:
         return _TIEMPO_POR_DEFECTO
 
@@ -66,6 +66,21 @@ class _ModeloNoUsable(Exception):
         super().__init__(codigo)
         self.codigo = codigo
         self.mensaje = mensaje
+
+
+class _Lento(Exception):
+    """El modelo no respondió a tiempo."""
+
+
+def _cuerpo_para(modelo: str, cuerpo: dict) -> bytes:
+    """Pide poco "razonamiento" interno: las preguntas del inventario son simples y así
+    las respuestas llegan en pocos segundos en vez de medio minuto."""
+    config = {"temperature": 0.3, "maxOutputTokens": 2048}
+    if modelo.startswith("gemini-2.5"):
+        config["thinkingConfig"] = {"thinkingBudget": 0}
+    elif modelo.startswith("gemini-"):
+        config["thinkingConfig"] = {"thinkingLevel": "low"}
+    return json.dumps({**cuerpo, "generationConfig": config}).encode("utf-8")
 
 
 class GeminiError(ErrorValidacion):
@@ -95,9 +110,7 @@ def consultar_gemini(instrucciones: str, mensajes: list[dict]) -> str:
             }
             for mensaje in mensajes
         ],
-        "generationConfig": {"temperature": 0.3},
     }
-    datos_json = json.dumps(cuerpo).encode("utf-8")
 
     # Si Google responde que el modelo está saturado (503 y similares), se reintenta un par
     # de veces y luego se prueba con los modelos de respaldo. Si un modelo no existe (404)
@@ -109,9 +122,13 @@ def consultar_gemini(instrucciones: str, mensajes: list[dict]) -> str:
             if espera:
                 time.sleep(espera)
             try:
-                return _consultar_modelo(modelo, clave, datos_json)
+                return _consultar_modelo(modelo, clave, _cuerpo_para(modelo, cuerpo))
             except _Saturado as saturado:
                 _log.warning("Gemini (%s) respondió %s en el intento %s.", modelo, saturado.codigo, intento + 1)
+            except _Lento:
+                _log.warning("Gemini (%s) no respondió en %s s; se prueba el siguiente.", modelo, _tiempo_maximo())
+                ultimo_error = ultimo_error or "Gemini tardó demasiado en responder. Inténtalo de nuevo en un momento."
+                break
             except _ModeloNoUsable as error:
                 _log.warning("Gemini (%s) no se pudo usar (%s); se prueba el siguiente.", modelo, error.codigo)
                 ultimo_error = ultimo_error or error.mensaje
@@ -142,10 +159,7 @@ def _consultar_modelo(modelo: str, clave: str, datos_json: bytes) -> str:
         # Se distingue "tardó demasiado" de "no hay conexión", y el motivo exacto va al log.
         motivo = getattr(error, "reason", error)
         if isinstance(motivo, TimeoutError) or isinstance(error, TimeoutError):
-            _log.warning("Gemini no respondió en %s s (modelo %s).", _tiempo_maximo(), modelo)
-            raise GeminiError(
-                "Gemini tardó demasiado en responder. Inténtalo de nuevo en un momento."
-            ) from error
+            raise _Lento() from error
         _log.warning("No se pudo conectar con Gemini (modelo %s): %r", modelo, motivo)
         raise GeminiError("No se pudo conectar con Gemini. Revisa la conexión a internet.") from error
     except json.JSONDecodeError as error:

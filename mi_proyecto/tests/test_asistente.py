@@ -316,7 +316,7 @@ def test_tiempo_de_espera_configurable(monkeypatch, con_clave):
     gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
     monkeypatch.setenv("GEMINI_TIMEOUT", "no-es-numero")
     gemini.consultar_gemini("x", [{"rol": "usuario", "texto": "Hola"}])
-    assert usados == [60, 120, 60]
+    assert usados == [25, 120, 25]
 
 
 def _respuesta_ok(texto="ok"):
@@ -405,3 +405,24 @@ def test_gemini_modelo_no_usable_pasa_al_siguiente(monkeypatch, con_clave, codig
     monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
     assert gemini.consultar_gemini("i", [{"rol": "usuario", "texto": "p"}]) == "hola"
     assert len(llamadas) == 2
+
+
+def test_gemini_pide_poco_razonamiento_para_responder_rapido():
+    cuerpo = {"contents": []}
+    tres = json.loads(gemini._cuerpo_para("gemini-3.5-flash", cuerpo))
+    assert tres["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
+    dos = json.loads(gemini._cuerpo_para("gemini-2.5-flash", cuerpo))
+    assert dos["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
+
+
+def test_gemini_lento_pasa_al_siguiente_modelo(monkeypatch, con_clave):
+    monkeypatch.setenv("GEMINI_MODEL", "lento")
+    monkeypatch.setenv("GEMINI_MODELOS_RESPALDO", "rapido")
+
+    def _urlopen(peticion, timeout):
+        if "/lento:" in peticion.full_url:
+            raise TimeoutError()
+        return _respuesta_ok("listo")
+
+    monkeypatch.setattr(gemini.urllib.request, "urlopen", _urlopen)
+    assert gemini.consultar_gemini("i", [{"rol": "usuario", "texto": "p"}]) == "listo"
